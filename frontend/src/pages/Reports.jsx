@@ -15,24 +15,50 @@ import {
   TableHead,
   TableRow,
   IconButton,
-  Typography
+  Typography,
+  Chip,
+  InputAdornment
 } from '@mui/material';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  AttachFile as AttachFileIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
+import { formatFileSize, getFileIcon } from '../utils/fileUtils';
 
 const Reports = () => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [attachments, setAttachments] = useState([]);
   const [editingReport, setEditingReport] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState(null);
   const [reports, setReports] = useState([
-    { id: 1, title: 'Monthly Revenue Report', content: 'Analysis of revenue streams...', date: '2024-01-20' },
-    { id: 2, title: 'Customer Satisfaction', content: 'Survey results and insights...', date: '2024-01-19' },
+    { 
+      id: 1, 
+      title: 'Monthly Revenue Report', 
+      content: 'Analysis of revenue streams...', 
+      date: '2024-01-20',
+      time: '14:30',
+      attachments: []
+    },
+    { 
+      id: 2, 
+      title: 'Customer Satisfaction', 
+      content: 'Survey results and insights...', 
+      date: '2024-01-19',
+      time: '09:15',
+      attachments: []
+    },
   ]);
 
   const handleOpen = (report = null) => {
@@ -40,10 +66,16 @@ const Reports = () => {
       setEditingReport(report);
       setTitle(report.title);
       setContent(report.content);
+      setSelectedDate(new Date(report.date));
+      setSelectedTime(new Date(`2024-01-01T${report.time}`));
+      setAttachments(report.attachments || []);
     } else {
       setEditingReport(null);
       setTitle('');
       setContent('');
+      setSelectedDate(new Date());
+      setSelectedTime(new Date());
+      setAttachments([]);
     }
     setOpen(true);
   };
@@ -52,26 +84,55 @@ const Reports = () => {
     setOpen(false);
     setTitle('');
     setContent('');
+    setSelectedDate(new Date());
+    setSelectedTime(new Date());
+    setAttachments([]);
     setEditingReport(null);
+  };
+
+  const handleFileUpload = (event) => {
+    const files = Array.from(event.target.files);
+    const newAttachments = files.map(file => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      data: URL.createObjectURL(file)
+    }));
+    setAttachments([...attachments, ...newAttachments]);
+  };
+
+  const handleRemoveFile = (index) => {
+    const newAttachments = attachments.filter((_, i) => i !== index);
+    setAttachments(newAttachments);
   };
 
   const handleSubmit = () => {
     if (title && content) {
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      const formattedTime = selectedTime.toTimeString().slice(0, 5);
+
       if (editingReport) {
-        // Update existing report
         const updatedReports = reports.map(report => 
           report.id === editingReport.id 
-            ? { ...report, title, content }
+            ? { 
+                ...report, 
+                title, 
+                content, 
+                date: formattedDate,
+                time: formattedTime,
+                attachments 
+              }
             : report
         );
         setReports(updatedReports);
       } else {
-        // Create new report
         const newReport = {
           id: reports.length + 1,
           title,
           content,
-          date: new Date().toISOString().split('T')[0]
+          date: formattedDate,
+          time: formattedTime,
+          attachments
         };
         setReports([...reports, newReport]);
       }
@@ -123,7 +184,8 @@ const Reports = () => {
             <TableRow>
               <TableCell sx={{ fontWeight: 600 }}>Title</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Content</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Date & Time</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Attachments</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -132,7 +194,25 @@ const Reports = () => {
               <TableRow key={report.id}>
                 <TableCell>{report.title}</TableCell>
                 <TableCell>{report.content}</TableCell>
-                <TableCell>{report.date}</TableCell>
+                <TableCell>
+                  {report.date} {report.time}
+                </TableCell>
+                <TableCell>
+                  {report.attachments?.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {report.attachments.map((file, index) => (
+                        <Chip
+                          key={index}
+                          label={`${getFileIcon(file.name)} ${file.name}`}
+                          size="small"
+                          sx={{ maxWidth: 150 }}
+                        />
+                      ))}
+                    </Box>
+                  ) : (
+                    '-'
+                  )}
+                </TableCell>
                 <TableCell>
                   <IconButton 
                     size="small" 
@@ -178,7 +258,66 @@ const Reports = () => {
             rows={4}
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            sx={{ mb: 2 }}
           />
+          
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+              <DatePicker
+                label="Date"
+                value={selectedDate}
+                onChange={setSelectedDate}
+                sx={{ flex: 1 }}
+              />
+              <TimePicker
+                label="Time"
+                value={selectedTime}
+                onChange={setSelectedTime}
+                sx={{ flex: 1 }}
+              />
+            </Box>
+          </LocalizationProvider>
+
+          <Box sx={{ mb: 2 }}>
+            <input
+              type="file"
+              multiple
+              id="file-upload"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+            />
+            <label htmlFor="file-upload">
+              <Button
+                component="span"
+                variant="outlined"
+                startIcon={<AttachFileIcon />}
+                sx={{ mb: 2 }}
+              >
+                Attach Files
+              </Button>
+            </label>
+
+            {attachments.length > 0 && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {attachments.map((file, index) => (
+                  <Chip
+                    key={index}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <span>{getFileIcon(file.name)}</span>
+                        <span>{file.name}</span>
+                        <Typography variant="caption" sx={{ ml: 0.5, color: '#666' }}>
+                          ({formatFileSize(file.size)})
+                        </Typography>
+                      </Box>
+                    }
+                    onDelete={() => handleRemoveFile(index)}
+                    sx={{ maxWidth: '100%' }}
+                  />
+                ))}
+              </Box>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={handleClose} sx={{ color: '#666666' }}>
