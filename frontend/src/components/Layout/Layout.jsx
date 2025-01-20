@@ -46,10 +46,10 @@ const Layout = () => {
   };
 
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+    { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+    { text: 'Reports', icon: <ReportsIcon />, path: '/reports' },
     { text: 'Projects', icon: <ProjectsIcon />, path: '/projects', badge: '3/5' },
     { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
-    { text: 'Reports', icon: <ReportsIcon />, path: '/reports', badge: 'New' },
     { text: 'Extensions', icon: <ExtensionsIcon />, path: '/extensions' },
     { text: 'Companies', icon: <CompaniesIcon />, path: '/companies', badge: '17' },
     { text: 'People', icon: <PeopleIcon />, path: '/people', badge: '164' },

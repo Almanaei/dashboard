@@ -629,4 +629,42 @@ const Dashboard = () => {
                   </TableCell>
                   <TableCell>{String(deal.id).padStart(2, '0')}</TableCell>
                   <TableCell>{deal.name}</TableCell>
-              
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Avatar src={deal.contact.avatar} sx={{ width: 24, height: 24 }}>
+                        {deal.contact.name.charAt(0)}
+                      </Avatar>
+                      <Typography>{deal.contact.name}</Typography>
+                    </Box>
+                  </TableCell>
+                  <TableCell>{deal.contact.email}</TableCell>
+                  <TableCell align="right">${deal.value.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={deal.source}
+                      size="small"
+                      sx={{
+                        bgcolor: 
+                          deal.source === 'Social Networks' ? '#e3f2fd' :
+                          deal.source === 'Outreach' ? '#f5f5f5' :
+                          deal.source === 'Referrals' ? '#e8f5e9' :
+                          '#fff3e0',
+                        color:
+                          deal.source === 'Social Networks' ? '#2196f3' :
+                          deal.source === 'Outreach' ? '#9e9e9e' :
+                          deal.source === 'Referrals' ? '#4caf50' :
+                          '#ff9800',
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+    </Box>
+  );
+};
+
+export default Dashboard;

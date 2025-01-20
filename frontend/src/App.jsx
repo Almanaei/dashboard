@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Reports from './pages/Reports';
 import Projects from './pages/Projects';
 import ProjectDetails from './pages/ProjectDetails';
 import NewProject from './pages/NewProject';
@@ -28,6 +29,14 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <ProtectedRoute>
+                  <Reports />
                 </ProtectedRoute>
               }
             />
