@@ -17,6 +17,15 @@ import {
   Paper,
   Button,
   Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Menu,
+  MenuItem,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -32,6 +41,10 @@ import {
   Search as SearchIcon,
   Share as ShareIcon,
   MoreHoriz as MoreIcon,
+  ContentCopy as CopyIcon,
+  Settings as SettingsIcon,
+  Security as SecurityIcon,
+  Backup as BackupIcon,
 } from '@mui/icons-material';
 import { useSearch } from '@/context/SearchContext';
 import { getUserCount } from '@/services/userService';
@@ -45,6 +58,14 @@ const Layout = () => {
   const { globalSearch, setGlobalSearch } = useSearch();
   const [isCommandK, setIsCommandK] = useState(false);
   const [userCount, setUserCount] = useState(0);
+  
+  // Share dialog state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [shareSnackbarOpen, setShareSnackbarOpen] = useState(false);
+  
+  // Manage menu state
+  const [manageAnchorEl, setManageAnchorEl] = useState(null);
 
   useEffect(() => {
     const fetchUserCount = async () => {
@@ -57,13 +78,11 @@ const Layout = () => {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Check for Command/Control + F or Command/Control + K
       if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'k')) {
         e.preventDefault();
         setIsCommandK(true);
         document.querySelector('#global-search').focus();
       }
-      // Close search on Escape
       if (e.key === 'Escape') {
         setIsCommandK(false);
         document.querySelector('#global-search').blur();
@@ -74,6 +93,32 @@ const Layout = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
+  // Share functionality
+  const handleShareClick = () => {
+    const currentPath = window.location.href;
+    setShareLink(currentPath);
+    setShareDialogOpen(true);
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareLink);
+    setShareSnackbarOpen(true);
+    setShareDialogOpen(false);
+  };
+
+  // Manage functionality
+  const handleManageClick = (event) => {
+    setManageAnchorEl(event.currentTarget);
+  };
+
+  const handleManageClose = () => {
+    setManageAnchorEl(null);
+  };
+
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Reports', icon: <ReportsIcon />, path: '/reports' },
@@ -83,10 +128,6 @@ const Layout = () => {
     { text: 'Companies', icon: <CompaniesIcon />, path: '/companies', badge: '17' },
     { text: 'Users', icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
   ];
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
 
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -276,53 +317,129 @@ const Layout = () => {
           >
             <MenuIcon />
           </IconButton>
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton size="small">
+            <IconButton size="small" onClick={handleShareClick}>
               <ShareIcon />
             </IconButton>
             <Typography variant="body2">Share</Typography>
           </Box>
+
           <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-            <Button variant="outlined" size="small">
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleManageClick}
+              endIcon={<MoreIcon />}
+            >
               Manage
             </Button>
-            <IconButton size="small">
-              <MoreIcon />
-            </IconButton>
           </Box>
         </Toolbar>
       </AppBar>
+
+      {/* Share Dialog */}
+      <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)}>
+        <DialogTitle>Share Dashboard</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <TextField
+              fullWidth
+              value={shareLink}
+              InputProps={{
+                readOnly: true,
+                endAdornment: (
+                  <IconButton onClick={handleCopyLink}>
+                    <CopyIcon />
+                  </IconButton>
+                ),
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
+          <Button variant="contained" onClick={handleCopyLink}>
+            Copy Link
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manage Menu */}
+      <Menu
+        anchorEl={manageAnchorEl}
+        open={Boolean(manageAnchorEl)}
+        onClose={handleManageClose}
+      >
+        <MenuItem onClick={handleManageClose}>
+          <ListItemIcon>
+            <SettingsIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Settings</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleManageClose}>
+          <ListItemIcon>
+            <SecurityIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Security</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleManageClose}>
+          <ListItemIcon>
+            <BackupIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Backup & Restore</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      {/* Copy Success Snackbar */}
+      <Snackbar
+        open={shareSnackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setShareSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" sx={{ width: '100%' }}>
+          Link copied to clipboard!
+        </Alert>
+      </Snackbar>
 
       <Box
         component="nav"
         sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
       >
+        {/* Mobile drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
           onClose={handleDrawerToggle}
           ModalProps={{
-            keepMounted: true,
+            keepMounted: true, // Better open performance on mobile.
           }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+            },
           }}
         >
           {drawer}
         </Drawer>
+        {/* Desktop drawer */}
         <Drawer
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+            },
           }}
           open
         >
           {drawer}
         </Drawer>
       </Box>
-
       <Box
         component="main"
         sx={{
