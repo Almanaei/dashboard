@@ -5,6 +5,7 @@ import { dirname, join, extname } from 'path';
 import fs from 'fs';
 import { Report, ReportAttachment } from '../models/index.js';
 import { Op } from 'sequelize';
+import PDFDocument from 'pdfkit';
 
 const router = express.Router();
 
@@ -170,6 +171,55 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting report:', error);
     res.status(500).json({ message: 'Failed to delete report' });
+  }
+});
+
+// Generate PDF for a report
+router.get('/:id/pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const report = await Report.findByPk(id);
+    
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    // Create a new PDF document
+    const doc = new PDFDocument();
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=report-${id}.pdf`);
+    
+    // Pipe the PDF document to the response
+    doc.pipe(res);
+
+    // Add content to the PDF
+    doc
+      .fontSize(20)
+      .text(report.title, { align: 'center' })
+      .moveDown()
+      .fontSize(12)
+      .text(`Date: ${new Date(report.date).toLocaleDateString()}`)
+      .text(`Time: ${new Date(report.time).toLocaleTimeString()}`)
+      .moveDown();
+
+    if (report.address) {
+      doc.text(`Location: ${report.address}`).moveDown();
+    }
+
+    doc
+      .fontSize(14)
+      .text('Report Content', { underline: true })
+      .moveDown()
+      .fontSize(12)
+      .text(report.content);
+
+    // Finalize the PDF
+    doc.end();
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.status(500).json({ message: 'Failed to generate PDF' });
   }
 });
 

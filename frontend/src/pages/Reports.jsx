@@ -18,7 +18,10 @@ import {
   Typography,
   Chip,
   InputAdornment,
-  CircularProgress
+  CircularProgress,
+  Tooltip,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -30,10 +33,11 @@ import {
   Delete as DeleteIcon,
   AttachFile as AttachFileIcon,
   Close as CloseIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  PictureAsPdf as PdfIcon,
 } from '@mui/icons-material';
 import { formatFileSize, getFileIcon } from '../utils/fileUtils';
-import { getReports, addReport, updateReport, deleteReport } from '../services/reportService';
+import { getReports, addReport, updateReport, deleteReport, generatePDF } from '../services/reportService';
 import debounce from 'lodash.debounce';
 import { useSearch } from '@/context/SearchContext';
 
@@ -50,7 +54,7 @@ const Reports = () => {
   const [reportToDelete, setReportToDelete] = useState(null);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const { globalSearch } = useSearch();
 
   // Add debounce for search
@@ -60,9 +64,7 @@ const Reports = () => {
       try {
         const data = await getReports(query);
         setReports(data);
-        setError(null);
       } catch (err) {
-        setError('Failed to search reports');
         console.error(err);
       } finally {
         setLoading(false);
@@ -81,9 +83,7 @@ const Reports = () => {
       try {
         const data = await getReports();
         setReports(data);
-        setError(null);
       } catch (err) {
-        setError('Failed to load reports');
         console.error(err);
       } finally {
         setLoading(false);
@@ -170,10 +170,13 @@ const Reports = () => {
 
         const updatedReports = await getReports();
         setReports(updatedReports);
-        setError(null);
         handleClose();
       } catch (err) {
-        setError('Failed to save report');
+        setSnackbar({
+          open: true,
+          message: 'Failed to save report',
+          severity: 'error'
+        });
         console.error(err);
       } finally {
         setLoading(false);
@@ -193,11 +196,14 @@ const Reports = () => {
         await deleteReport(reportToDelete.id);
         const updatedReports = await getReports();
         setReports(updatedReports);
-        setError(null);
         setDeleteConfirmOpen(false);
         setReportToDelete(null);
       } catch (err) {
-        setError('Failed to delete report');
+        setSnackbar({
+          open: true,
+          message: 'Failed to delete report',
+          severity: 'error'
+        });
         console.error(err);
       } finally {
         setLoading(false);
@@ -216,22 +222,28 @@ const Reports = () => {
     window.open(fullUrl, '_blank');
   };
 
+  const handleGeneratePDF = async (report) => {
+    try {
+      await generatePDF(report.id);
+      setSnackbar({
+        open: true,
+        message: 'PDF generated successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Failed to generate PDF',
+        severity: 'error'
+      });
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
           <CircularProgress />
-        </Box>
-      )}
-      {error && (
-        <Box sx={{ 
-          bgcolor: '#ffebee', 
-          color: '#c62828', 
-          p: 2, 
-          borderRadius: 1,
-          mb: 2 
-        }}>
-          {error}
         </Box>
       )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -297,20 +309,31 @@ const Reports = () => {
                   )}
                 </TableCell>
                 <TableCell>
-                  <IconButton 
-                    size="small" 
-                    sx={{ color: '#2196f3', mr: 1 }}
-                    onClick={() => handleOpen(report)}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton 
-                    size="small" 
-                    sx={{ color: '#f44336' }}
-                    onClick={() => handleDeleteClick(report)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                    <Tooltip title="Download PDF">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleGeneratePDF(report)}
+                        color="primary"
+                      >
+                        <PdfIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <IconButton 
+                      size="small" 
+                      sx={{ color: '#2196f3', mr: 1 }}
+                      onClick={() => handleOpen(report)}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton 
+                      size="small" 
+                      sx={{ color: '#f44336' }}
+                      onClick={() => handleDeleteClick(report)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}
@@ -450,6 +473,18 @@ const Reports = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
