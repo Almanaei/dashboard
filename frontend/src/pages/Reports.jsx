@@ -179,6 +179,12 @@ const Reports = () => {
     setReportToDelete(null);
   };
 
+  const handleOpenFile = (url) => {
+    // Create full URL using backend URL
+    const fullUrl = `http://localhost:5005${url}`;
+    window.open(fullUrl, '_blank');
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       {loading && (
@@ -239,9 +245,15 @@ const Reports = () => {
                       {report.attachments.map((file, index) => (
                         <Chip
                           key={index}
-                          label={`${getFileIcon(file.name)} ${file.name}`}
-                          size="small"
-                          sx={{ maxWidth: 150 }}
+                          icon={getFileIcon(file.type)}
+                          label={`${file.name} (${formatFileSize(file.size)})`}
+                          onClick={() => handleOpenFile(file.url)}
+                          sx={{ 
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: 'primary.light'
+                            }
+                          }}
                         />
                       ))}
                     </Box>
