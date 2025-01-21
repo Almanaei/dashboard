@@ -2,9 +2,11 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5005/api/reports';
 
-export const getReports = async () => {
+export const getReports = async (search = '') => {
   try {
-    const response = await axios.get(API_URL);
+    const response = await axios.get(API_URL, {
+      params: { search }
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching reports:', error);

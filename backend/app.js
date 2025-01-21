@@ -7,6 +7,7 @@ import protectedRoutes from './routes/protected.js';
 import projectRoutes from './routes/projects.js';
 import statisticsRoutes from './routes/statistics.js';
 import reportsRoutes from './routes/reports.js';
+import userRoutes from './routes/users.js';
 import { Op } from 'sequelize';
 import User from './models/User.js';
 import Project from './models/Project.js';
@@ -42,6 +43,7 @@ app.use('/api/protected', protectedRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/statistics', statisticsRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/users', userRoutes);
 
 // Basic test route
 app.get('/', (req, res) => {

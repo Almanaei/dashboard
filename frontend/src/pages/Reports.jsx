@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -29,10 +29,13 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   AttachFile as AttachFileIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { formatFileSize, getFileIcon } from '../utils/fileUtils';
 import { getReports, addReport, updateReport, deleteReport } from '../services/reportService';
+import debounce from 'lodash.debounce';
+import { useSearch } from '@/context/SearchContext';
 
 const Reports = () => {
   const [open, setOpen] = useState(false);
@@ -48,6 +51,29 @@ const Reports = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { globalSearch } = useSearch();
+
+  // Add debounce for search
+  const debouncedSearch = useCallback(
+    debounce(async (query) => {
+      setLoading(true);
+      try {
+        const data = await getReports(query);
+        setReports(data);
+        setError(null);
+      } catch (err) {
+        setError('Failed to search reports');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }, 300),
+    []
+  );
+
+  useEffect(() => {
+    debouncedSearch(globalSearch);
+  }, [globalSearch]);
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -209,20 +235,22 @@ const Reports = () => {
         </Box>
       )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>Reports</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpen()}
-          sx={{
-            bgcolor: '#2196f3',
-            '&:hover': {
-              bgcolor: '#1976d2'
-            }
-          }}
-        >
-          New Report
-        </Button>
+        <Typography variant="h4">Reports</Typography>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpen()}
+            sx={{
+              bgcolor: '#2196f3',
+              '&:hover': {
+                bgcolor: '#1976d2'
+              }
+            }}
+          >
+            New Report
+          </Button>
+        </Box>
       </Box>
 
       <TableContainer component={Paper} sx={{ mt: 2 }}>

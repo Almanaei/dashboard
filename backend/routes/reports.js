@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join, extname } from 'path';
 import fs from 'fs';
 import { Report, ReportAttachment } from '../models/index.js';
+import { Op } from 'sequelize';
 
 const router = express.Router();
 
@@ -36,10 +37,24 @@ const upload = multer({
   }
 });
 
-// Get all reports
+// Get all reports with optional search
 router.get('/', async (req, res) => {
   try {
+    const { search } = req.query;
+    let whereClause = {};
+    
+    if (search) {
+      whereClause = {
+        [Op.or]: [
+          { title: { [Op.iLike]: `%${search}%` } },
+          { content: { [Op.iLike]: `%${search}%` } },
+          { address: { [Op.iLike]: `%${search}%` } }
+        ]
+      };
+    }
+
     const reports = await Report.findAll({
+      where: whereClause,
       include: [{
         model: ReportAttachment,
         as: 'attachments'

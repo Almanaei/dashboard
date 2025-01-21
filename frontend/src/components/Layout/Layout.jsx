@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -33,6 +33,8 @@ import {
   Share as ShareIcon,
   MoreHoriz as MoreIcon,
 } from '@mui/icons-material';
+import { useSearch } from '@/context/SearchContext';
+import { getUserCount } from '@/services/userService';
 
 const drawerWidth = 240;
 
@@ -40,10 +42,37 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { globalSearch, setGlobalSearch } = useSearch();
+  const [isCommandK, setIsCommandK] = useState(false);
+  const [userCount, setUserCount] = useState(0);
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
+  useEffect(() => {
+    const fetchUserCount = async () => {
+      const count = await getUserCount();
+      setUserCount(count);
+    };
+    fetchUserCount();
+  }, []);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Check for Command/Control + F or Command/Control + K
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'k')) {
+        e.preventDefault();
+        setIsCommandK(true);
+        document.querySelector('#global-search').focus();
+      }
+      // Close search on Escape
+      if (e.key === 'Escape') {
+        setIsCommandK(false);
+        document.querySelector('#global-search').blur();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
@@ -52,8 +81,12 @@ const Layout = () => {
     { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
     { text: 'Extensions', icon: <ExtensionsIcon />, path: '/extensions' },
     { text: 'Companies', icon: <CompaniesIcon />, path: '/companies', badge: '17' },
-    { text: 'People', icon: <PeopleIcon />, path: '/people', badge: '164' },
+    { text: 'Users', icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
   ];
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
 
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -67,17 +100,28 @@ const Layout = () => {
       <Box sx={{ px: 2, py: 1 }}>
         <Paper
           component="form"
+          onSubmit={(e) => e.preventDefault()}
           sx={{
             p: '2px 4px',
             display: 'flex',
             alignItems: 'center',
             bgcolor: 'background.default',
+            transition: 'all 0.2s',
+            ...(isCommandK && {
+              bgcolor: 'background.paper',
+              boxShadow: '0 0 0 2px #2196f3'
+            })
           }}
         >
           <InputBase
+            id="global-search"
             sx={{ ml: 1, flex: 1 }}
             placeholder="Search..."
-            inputProps={{ 'aria-label': 'search' }}
+            value={globalSearch}
+            onChange={(e) => setGlobalSearch(e.target.value)}
+            onFocus={() => setIsCommandK(true)}
+            onBlur={() => setIsCommandK(false)}
+            inputProps={{ 'aria-label': 'global search' }}
           />
           <Typography
             variant="caption"
@@ -107,23 +151,30 @@ const Layout = () => {
               '&.Mui-selected': {
                 bgcolor: 'primary.main',
                 color: 'white',
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                },
                 '& .MuiListItemIcon-root': {
                   color: 'white',
                 },
               },
             }}
           >
-            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
+            <ListItemIcon
+              sx={{
+                minWidth: 40,
+                color: location.pathname === item.path ? 'white' : 'inherit',
+              }}
+            >
+              {item.icon}
+            </ListItemIcon>
             <ListItemText primary={item.text} />
             {item.badge && (
               <Typography
                 variant="caption"
                 sx={{
-                  px: 1,
-                  py: 0.5,
-                  bgcolor: location.pathname === item.path ? 'rgba(255,255,255,0.2)' : 'background.default',
-                  borderRadius: 1,
                   ml: 1,
+                  color: location.pathname === item.path ? 'white' : 'text.secondary',
                 }}
               >
                 {item.badge}
@@ -195,7 +246,7 @@ const Layout = () => {
             fullWidth
             sx={{ mt: 2 }}
           >
-            Get full access 🚀
+            Get full access 
           </Button>
         </Box>
       </Box>
