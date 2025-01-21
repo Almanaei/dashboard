@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -17,7 +17,8 @@ import {
   IconButton,
   Typography,
   Chip,
-  InputAdornment
+  InputAdornment,
+  CircularProgress
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -31,6 +32,7 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { formatFileSize, getFileIcon } from '../utils/fileUtils';
+import { getReports, addReport, updateReport, deleteReport } from '../services/reportService';
 
 const Reports = () => {
   const [open, setOpen] = useState(false);
@@ -42,24 +44,27 @@ const Reports = () => {
   const [editingReport, setEditingReport] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState(null);
-  const [reports, setReports] = useState([
-    { 
-      id: 1, 
-      title: 'Monthly Revenue Report', 
-      content: 'Analysis of revenue streams...', 
-      date: '2024-01-20',
-      time: '14:30',
-      attachments: []
-    },
-    { 
-      id: 2, 
-      title: 'Customer Satisfaction', 
-      content: 'Survey results and insights...', 
-      date: '2024-01-19',
-      time: '09:15',
-      attachments: []
-    },
-  ]);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchReports = async () => {
+      setLoading(true);
+      try {
+        const data = await getReports();
+        setReports(data);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load reports');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReports();
+  }, []);
 
   const handleOpen = (report = null) => {
     if (report) {
@@ -92,12 +97,16 @@ const Reports = () => {
 
   const handleFileUpload = (event) => {
     const files = Array.from(event.target.files);
-    const newAttachments = files.map(file => ({
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      data: URL.createObjectURL(file)
-    }));
+    const newAttachments = files.map(file => {
+      // Store the actual file object for upload
+      return {
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        preview: URL.createObjectURL(file)
+      };
+    });
     setAttachments([...attachments, ...newAttachments]);
   };
 
@@ -106,37 +115,38 @@ const Reports = () => {
     setAttachments(newAttachments);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (title && content) {
-      const formattedDate = selectedDate.toISOString().split('T')[0];
-      const formattedTime = selectedTime.toTimeString().slice(0, 5);
+      setLoading(true);
+      try {
+        const formattedDate = selectedDate.toISOString().split('T')[0];
+        const formattedTime = selectedTime.toTimeString().slice(0, 5);
 
-      if (editingReport) {
-        const updatedReports = reports.map(report => 
-          report.id === editingReport.id 
-            ? { 
-                ...report, 
-                title, 
-                content, 
-                date: formattedDate,
-                time: formattedTime,
-                attachments 
-              }
-            : report
-        );
-        setReports(updatedReports);
-      } else {
-        const newReport = {
-          id: reports.length + 1,
+        const reportData = {
           title,
           content,
           date: formattedDate,
           time: formattedTime,
-          attachments
+          // Send only the file objects for upload
+          attachments: attachments.map(att => att.file)
         };
-        setReports([...reports, newReport]);
+
+        if (editingReport) {
+          await updateReport({ ...reportData, id: editingReport.id });
+        } else {
+          await addReport(reportData);
+        }
+
+        const updatedReports = await getReports();
+        setReports(updatedReports);
+        setError(null);
+        handleClose();
+      } catch (err) {
+        setError('Failed to save report');
+        console.error(err);
+      } finally {
+        setLoading(false);
       }
-      handleClose();
     }
   };
 
@@ -145,12 +155,22 @@ const Reports = () => {
     setDeleteConfirmOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (reportToDelete) {
-      const updatedReports = reports.filter(report => report.id !== reportToDelete.id);
-      setReports(updatedReports);
-      setDeleteConfirmOpen(false);
-      setReportToDelete(null);
+      setLoading(true);
+      try {
+        await deleteReport(reportToDelete.id);
+        const updatedReports = await getReports();
+        setReports(updatedReports);
+        setError(null);
+        setDeleteConfirmOpen(false);
+        setReportToDelete(null);
+      } catch (err) {
+        setError('Failed to delete report');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -161,6 +181,22 @@ const Reports = () => {
 
   return (
     <Box sx={{ p: 3 }}>
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+          <CircularProgress />
+        </Box>
+      )}
+      {error && (
+        <Box sx={{ 
+          bgcolor: '#ffebee', 
+          color: '#c62828', 
+          p: 2, 
+          borderRadius: 1,
+          mb: 2 
+        }}>
+          {error}
+        </Box>
+      )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>Reports</Typography>
         <Button
@@ -298,21 +334,14 @@ const Reports = () => {
             </label>
 
             {attachments.length > 0 && (
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Box sx={{ mt: 2 }}>
                 {attachments.map((file, index) => (
                   <Chip
                     key={index}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <span>{getFileIcon(file.name)}</span>
-                        <span>{file.name}</span>
-                        <Typography variant="caption" sx={{ ml: 0.5, color: '#666' }}>
-                          ({formatFileSize(file.size)})
-                        </Typography>
-                      </Box>
-                    }
+                    icon={getFileIcon(file.type)}
+                    label={`${file.name} (${formatFileSize(file.size)})`}
                     onDelete={() => handleRemoveFile(index)}
-                    sx={{ maxWidth: '100%' }}
+                    sx={{ m: 0.5 }}
                   />
                 ))}
               </Box>
