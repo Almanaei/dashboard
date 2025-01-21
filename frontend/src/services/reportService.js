@@ -17,6 +17,7 @@ export const addReport = async (report) => {
     const formData = new FormData();
     formData.append('title', report.title);
     formData.append('content', report.content);
+    formData.append('address', report.address || '');
     formData.append('date', report.date);
     formData.append('time', report.time);
 
@@ -44,6 +45,7 @@ export const updateReport = async (report) => {
     const formData = new FormData();
     formData.append('title', report.title);
     formData.append('content', report.content);
+    formData.append('address', report.address || '');
     formData.append('date', report.date);
     formData.append('time', report.time);
 
@@ -69,7 +71,6 @@ export const updateReport = async (report) => {
 export const deleteReport = async (reportId) => {
   try {
     await axios.delete(`${API_URL}/${reportId}`);
-    return true;
   } catch (error) {
     console.error('Error deleting report:', error);
     throw error;

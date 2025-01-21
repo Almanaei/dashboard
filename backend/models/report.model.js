@@ -24,6 +24,10 @@ const initReport = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: false
     },
+    address: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     date: {
       type: DataTypes.DATEONLY,
       allowNull: false

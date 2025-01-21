@@ -38,6 +38,7 @@ const Reports = () => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [address, setAddress] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState(new Date());
   const [attachments, setAttachments] = useState([]);
@@ -71,6 +72,7 @@ const Reports = () => {
       setEditingReport(report);
       setTitle(report.title);
       setContent(report.content);
+      setAddress(report.address || '');
       setSelectedDate(new Date(report.date));
       setSelectedTime(new Date(`2024-01-01T${report.time}`));
       setAttachments(report.attachments || []);
@@ -78,6 +80,7 @@ const Reports = () => {
       setEditingReport(null);
       setTitle('');
       setContent('');
+      setAddress('');
       setSelectedDate(new Date());
       setSelectedTime(new Date());
       setAttachments([]);
@@ -89,6 +92,7 @@ const Reports = () => {
     setOpen(false);
     setTitle('');
     setContent('');
+    setAddress('');
     setSelectedDate(new Date());
     setSelectedTime(new Date());
     setAttachments([]);
@@ -125,6 +129,7 @@ const Reports = () => {
         const reportData = {
           title,
           content,
+          address,
           date: formattedDate,
           time: formattedTime,
           // Send only the file objects for upload
@@ -226,6 +231,7 @@ const Reports = () => {
             <TableRow>
               <TableCell sx={{ fontWeight: 600 }}>Title</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Content</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Date & Time</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Attachments</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -236,6 +242,7 @@ const Reports = () => {
               <TableRow key={report.id}>
                 <TableCell>{report.title}</TableCell>
                 <TableCell>{report.content}</TableCell>
+                <TableCell>{report.address}</TableCell>
                 <TableCell>
                   {report.date} {report.time}
                 </TableCell>
@@ -306,6 +313,14 @@ const Reports = () => {
             rows={4}
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Address"
+            fullWidth
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
             sx={{ mb: 2 }}
           />
           

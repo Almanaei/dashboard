@@ -56,14 +56,15 @@ router.get('/', async (req, res) => {
 // Create a new report
 router.post('/', upload.array('attachments'), async (req, res) => {
   try {
-    const { title, content, date, time } = req.body;
+    const { title, content, date, time, address } = req.body;
     
     // Create the report
     const report = await Report.create({
       title,
       content,
       date,
-      time
+      time,
+      address
     });
 
     // Process uploaded files
@@ -97,7 +98,7 @@ router.post('/', upload.array('attachments'), async (req, res) => {
 // Update a report
 router.put('/:id', upload.array('attachments'), async (req, res) => {
   try {
-    const { title, content, date, time } = req.body;
+    const { title, content, date, time, address } = req.body;
     const report = await Report.findByPk(req.params.id);
     
     if (!report) {
@@ -109,7 +110,8 @@ router.put('/:id', upload.array('attachments'), async (req, res) => {
       title,
       content,
       date,
-      time
+      time,
+      address
     });
 
     // Process new uploaded files
