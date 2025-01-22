@@ -22,16 +22,20 @@ import {
   Tooltip,
   Snackbar,
   Alert,
+  Grid,
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  AttachFile as AttachFileIcon,
+  PictureAsPdf as PictureAsPdfIcon,
+  Description as DescriptionIcon,
+} from '@mui/icons-material';
 import { formatFileSize, getFileIcon } from '../utils/fileUtils';
 import { getReports, addReport, updateReport, deleteReport, generatePDF } from '../services/reportService';
 import debounce from 'lodash.debounce';
@@ -54,44 +58,38 @@ const Reports = () => {
   const [reportToDelete, setReportToDelete] = useState(null);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const { globalSearch } = useSearch();
 
-  // Add debounce for search
-  const debouncedSearch = useCallback(
-    debounce(async (query) => {
-      setLoading(true);
-      try {
-        const data = await getReports(query);
-        setReports(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }, 300),
-    []
-  );
-
   useEffect(() => {
-    debouncedSearch(globalSearch);
+    fetchReports();
   }, [globalSearch]);
 
-  useEffect(() => {
-    const fetchReports = async () => {
-      setLoading(true);
-      try {
-        const data = await getReports();
-        setReports(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return format(d, isRTL ? 'dd/MM/yyyy' : 'MM/dd/yyyy', { locale: isRTL ? arSA : undefined });
+  };
 
-    fetchReports();
-  }, []);
+  const formatTime = (time) => {
+    if (!time) return '';
+    return format(new Date(`2000-01-01T${time}`), isRTL ? 'HH:mm' : 'hh:mm a', { locale: isRTL ? arSA : undefined });
+  };
+
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const data = await getReports(globalSearch);
+      setReports(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load reports');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleOpen = (report = null) => {
     if (report) {
@@ -102,77 +100,47 @@ const Reports = () => {
       setSelectedDate(new Date(report.date));
       setSelectedTime(report.time);
       setAttachments(report.attachments || []);
+    } else {
+      setEditingReport(null);
+      setTitle('');
+      setContent('');
+      setAddress('');
+      setSelectedDate(new Date());
+      setSelectedTime('');
+      setAttachments([]);
     }
     setOpen(true);
   };
 
   const handleClose = () => {
     setOpen(false);
-    setTitle('');
-    setContent('');
-    setAddress('');
-    setSelectedDate(new Date());
-    setSelectedTime('');
-    setAttachments([]);
     setEditingReport(null);
   };
 
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    const newAttachments = files.map(file => {
-      // Store the actual file object for upload
-      return {
-        file,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        preview: URL.createObjectURL(file)
-      };
-    });
-    setAttachments([...attachments, ...newAttachments]);
-  };
-
-  const handleRemoveFile = (index) => {
-    const newAttachments = attachments.filter((_, i) => i !== index);
-    setAttachments(newAttachments);
-  };
-
-  const handleSubmit = async () => {
-    if (title && content) {
-      setLoading(true);
-      try {
-        const formattedDate = selectedDate.toISOString().split('T')[0];
-        const formattedTime = selectedTime.toTimeString().slice(0, 5);
-
-        const reportData = {
-          title,
-          content,
-          address,
-          date: formattedDate,
-          time: formattedTime,
-          // Send only the file objects for upload
-          attachments: attachments.map(att => att.file)
-        };
-
-        if (editingReport) {
-          await updateReport({ ...reportData, id: editingReport.id });
-        } else {
-          await addReport(reportData);
-        }
-
-        const updatedReports = await getReports();
-        setReports(updatedReports);
-        handleClose();
-      } catch (err) {
-        setSnackbar({
-          open: true,
-          message: 'Failed to save report',
-          severity: 'error'
-        });
-        console.error(err);
-      } finally {
-        setLoading(false);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('content', content);
+    formData.append('address', address);
+    formData.append('date', format(selectedDate, 'yyyy-MM-dd'));
+    formData.append('time', selectedTime);
+    attachments.forEach(file => {
+      if (file instanceof File) {
+        formData.append('attachments', file);
       }
+    });
+
+    try {
+      if (editingReport) {
+        await updateReport(editingReport.id, formData);
+      } else {
+        await addReport(formData);
+      }
+      handleClose();
+      fetchReports();
+    } catch (error) {
+      console.error('Error:', error);
     }
   };
 
@@ -186,32 +154,25 @@ const Reports = () => {
       setLoading(true);
       try {
         await deleteReport(reportToDelete.id);
-        const updatedReports = await getReports();
-        setReports(updatedReports);
+        await fetchReports();
         setDeleteConfirmOpen(false);
         setReportToDelete(null);
-      } catch (err) {
         setSnackbar({
           open: true,
-          message: 'Failed to delete report',
+          message: t('reportDeletedSuccessfully'),
+          severity: 'success'
+        });
+      } catch (err) {
+        console.error(err);
+        setSnackbar({
+          open: true,
+          message: t('failedToDeleteReport'),
           severity: 'error'
         });
-        console.error(err);
       } finally {
         setLoading(false);
       }
     }
-  };
-
-  const handleDeleteCancel = () => {
-    setDeleteConfirmOpen(false);
-    setReportToDelete(null);
-  };
-
-  const handleOpenFile = (url) => {
-    // Create full URL using backend URL
-    const fullUrl = `http://localhost:5005${url}`;
-    window.open(fullUrl, '_blank');
   };
 
   const handleGeneratePDF = async (report) => {
@@ -219,283 +180,133 @@ const Reports = () => {
       await generatePDF(report.id);
       setSnackbar({
         open: true,
-        message: 'PDF generated successfully',
+        message: t('pdfGeneratedSuccessfully'),
         severity: 'success'
       });
     } catch (error) {
+      console.error('Error generating PDF:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to generate PDF',
+        message: t('failedToGeneratePDF'),
         severity: 'error'
       });
     }
   };
 
-  const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    if (isRTL) {
-      const arabicNums = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-      const day = d.getDate().toString().padStart(2, '0');
-      const month = (d.getMonth() + 1).toString().padStart(2, '0');
-      const year = d.getFullYear().toString();
-      
-      return `${day}/${month}/${year}`.split('').map(c => {
-        return arabicNums[c] || c;
-      }).join('');
-    }
-    return date;
+  const handleOpenFile = (url) => {
+    window.open(url, '_blank');
   };
 
-  const formatTime = (time) => {
-    if (!time) return '';
-    if (isRTL) {
-      const arabicNums = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-      return time.split('').map(c => {
-        return arabicNums[c] || c;
-      }).join('');
-    }
-    return time;
-  };
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ mt: 2 }}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ 
-      p: 3, 
-      direction: isRTL ? 'rtl' : 'ltr',
-      '& *': { fontFamily: isRTL ? 'Arial, sans-serif' : 'inherit' }
+      p: 3,
+      pt: !isRTL ? 10 : 3,
+      direction: isRTL ? 'rtl' : 'ltr'
     }}>
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-          <CircularProgress />
-        </Box>
-      )}
       <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3,
-        gap: 2
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        mb: 3
       }}>
-        <Typography 
-          variant="h4" 
-          component="h1"
-          sx={{ 
-            fontWeight: 'bold',
-            color: 'primary.main'
-          }}
-        >
-          {t('reports')}
-        </Typography>
+        <Typography variant="h4">{t('reports')}</Typography>
         <Button
           variant="contained"
-          color="primary"
-          startIcon={isRTL ? null : <AddIcon />}
-          endIcon={isRTL ? <AddIcon /> : null}
+          startIcon={<AddIcon />}
           onClick={() => handleOpen()}
-          sx={{
-            minWidth: 140,
-            fontWeight: 'bold',
-            '&:hover': {
-              backgroundColor: 'primary.dark'
-            }
-          }}
         >
           {t('newReport')}
         </Button>
       </Box>
 
-      <TableContainer 
-        component={Paper} 
-        sx={{ 
-          width: '100%',
-          overflowX: 'auto',
-          direction: isRTL ? 'rtl' : 'ltr',
-          boxShadow: 3,
-          borderRadius: 2,
-          '& .MuiTableCell-root': {
-            borderColor: 'divider',
-            py: 2,
-            px: 2
-          }
-        }}
-      >
-        <Table sx={{ minWidth: 800 }}>
+      <TableContainer component={Paper}>
+        <Table>
           <TableHead>
             <TableRow>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold',
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  textAlign: isRTL ? 'right' : 'left',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {t('reportTitle')}
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold',
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  textAlign: isRTL ? 'right' : 'left'
-                }}
-              >
-                {t('reportContent')}
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold',
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  textAlign: isRTL ? 'right' : 'left',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {t('reportAddress')}
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold',
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  textAlign: isRTL ? 'right' : 'left',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {t('reportDateAndTime')}
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold',
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  textAlign: isRTL ? 'right' : 'left'
-                }}
-              >
-                {t('reportAttachments')}
-              </TableCell>
-              <TableCell 
-                sx={{ 
-                  fontWeight: 'bold',
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  textAlign: isRTL ? 'left' : 'right',
-                  minWidth: '150px',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {t('reportActions')}
-              </TableCell>
+              <TableCell>{t('title')}</TableCell>
+              <TableCell>{t('content')}</TableCell>
+              <TableCell>{t('address')}</TableCell>
+              <TableCell>{t('dateAndTime')}</TableCell>
+              <TableCell>{t('attachments')}</TableCell>
+              <TableCell align="right">{t('actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {reports.map((report) => (
-              <TableRow 
-                key={report.id}
-                sx={{ 
-                  '&:hover': { 
-                    backgroundColor: 'action.hover'
-                  },
-                  '&:nth-of-type(odd)': {
-                    backgroundColor: 'action.hover'
-                  }
-                }}
-              >
-                <TableCell sx={{ 
-                  textAlign: isRTL ? 'right' : 'left',
-                  fontWeight: 'medium'
-                }}>
-                  {report.title}
+              <TableRow key={report.id} hover>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <DescriptionIcon color="primary" />
+                    <Typography variant="body1">{report.title}</Typography>
+                  </Box>
                 </TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  {report.content}
+                <TableCell>
+                  <Typography variant="body2" sx={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {report.content}
+                  </Typography>
                 </TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  {report.address}
+                <TableCell>{report.address}</TableCell>
+                <TableCell>
+                  <Box>
+                    <Typography variant="body2">{formatDate(report.date)}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatTime(report.time)}
+                    </Typography>
+                  </Box>
                 </TableCell>
-                <TableCell sx={{ 
-                  textAlign: isRTL ? 'right' : 'left',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {`${formatDate(report.date)} ${formatTime(report.time)}`}
-                </TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  {report.attachments?.map((attachment, index) => (
-                    <Box 
-                      key={index} 
-                      sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: 1, 
-                        mb: 1,
-                        flexDirection: isRTL ? 'row-reverse' : 'row'
-                      }}
-                    >
-                      <AttachFileIcon fontSize="small" />
-                      <Typography variant="body2">
-                        {`${attachment.name} (${(attachment.size / 1024).toFixed(2)} KB)`}
-                      </Typography>
-                    </Box>
+                <TableCell>
+                  {report.attachments && report.attachments.map((attachment, index) => (
+                    <Chip
+                      key={index}
+                      icon={<AttachFileIcon />}
+                      label={attachment.name}
+                      size="small"
+                      onClick={() => handleOpenFile(attachment.url)}
+                      sx={{ mr: 1, mb: 1 }}
+                    />
                   ))}
                 </TableCell>
-                <TableCell align={isRTL ? 'left' : 'right'}>
-                  <Box 
-                    sx={{ 
-                      display: 'flex', 
-                      gap: 1, 
-                      justifyContent: isRTL ? 'flex-start' : 'flex-end',
-                      '& .MuiIconButton-root': {
-                        visibility: 'visible',
-                        opacity: 1,
-                        padding: 1
-                      }
-                    }}
-                  >
-                    <Tooltip title={t('downloadPdf')} placement={isRTL ? 'bottom-end' : 'bottom-start'}>
-                      <IconButton 
-                        size="small" 
+                <TableCell align="right">
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                    <Tooltip title={t('generatePDF')}>
+                      <IconButton
+                        size="small"
                         onClick={() => handleGeneratePDF(report)}
-                        sx={{ 
-                          color: 'primary.main',
-                          backgroundColor: 'primary.lighter',
-                          '&:hover': {
-                            backgroundColor: 'primary.light',
-                            color: 'primary.dark'
-                          }
-                        }}
+                        color="primary"
                       >
                         <PictureAsPdfIcon />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title={t('edit')} placement={isRTL ? 'bottom-end' : 'bottom-start'}>
+                    <Tooltip title={t('edit')}>
                       <IconButton
                         size="small"
                         onClick={() => handleOpen(report)}
-                        sx={{ 
-                          color: 'primary.main',
-                          backgroundColor: 'primary.lighter',
-                          '&:hover': {
-                            backgroundColor: 'primary.light',
-                            color: 'primary.dark'
-                          }
-                        }}
+                        color="primary"
                       >
                         <EditIcon />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title={t('delete')} placement={isRTL ? 'bottom-end' : 'bottom-start'}>
+                    <Tooltip title={t('delete')}>
                       <IconButton
                         size="small"
                         onClick={() => handleDeleteClick(report)}
-                        sx={{ 
-                          color: 'error.main',
-                          backgroundColor: 'error.lighter',
-                          '&:hover': {
-                            backgroundColor: 'error.light',
-                            color: 'error.dark'
-                          }
-                        }}
+                        color="error"
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -508,182 +319,96 @@ const Reports = () => {
         </Table>
       </TableContainer>
 
-      {/* Create/Edit Dialog */}
-      <Dialog 
-        open={open} 
-        onClose={handleClose}
-        maxWidth="sm"
-        fullWidth
-        sx={{ 
-          '& .MuiDialog-paper': { 
-            direction: isRTL ? 'rtl' : 'ltr',
-            minWidth: { sm: '600px' }
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          fontWeight: 'bold',
-          backgroundColor: 'primary.main',
-          color: 'white',
-          px: 3
-        }}>
+      {/* Create/Edit Report Dialog */}
+      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+        <DialogTitle>
           {editingReport ? t('editReport') : t('newReport')}
         </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: 2, 
-            pt: 2,
-            '& .MuiFormLabel-root': {
-              textAlign: isRTL ? 'right' : 'left',
-              left: isRTL ? 'auto' : 12,
-              right: isRTL ? 12 : 'auto',
-              transformOrigin: isRTL ? 'right' : 'left'
-            }
-          }}>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
             <TextField
-              label={t('reportTitle')}
+              label={t('title')}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               fullWidth
               required
-              sx={{ 
-                '& .MuiInputBase-input': {
-                  textAlign: isRTL ? 'right' : 'left'
-                }
-              }}
             />
             <TextField
-              label={t('reportContent')}
+              label={t('content')}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               multiline
               rows={4}
               fullWidth
               required
-              sx={{ 
-                '& .MuiInputBase-input': {
-                  textAlign: isRTL ? 'right' : 'left'
-                }
-              }}
             />
             <TextField
-              label={t('reportAddress')}
+              label={t('address')}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               fullWidth
               required
-              sx={{ 
-                '& .MuiInputBase-input': {
-                  textAlign: isRTL ? 'right' : 'left'
-                }
-              }}
             />
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <Box sx={{ 
-                display: 'flex', 
-                gap: 2,
-                flexDirection: isRTL ? 'row-reverse' : 'row'
-              }}>
-                <DatePicker
-                  label={t('reportDate')}
-                  value={selectedDate}
-                  onChange={setSelectedDate}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      fullWidth
-                      sx={{ 
-                        '& .MuiInputBase-input': {
-                          textAlign: isRTL ? 'right' : 'left'
-                        }
-                      }}
-                    />
-                  )}
-                />
-                <TimePicker
-                  label={t('reportTime')}
-                  value={selectedTime}
-                  onChange={setSelectedTime}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      fullWidth
-                      sx={{ 
-                        '& .MuiInputBase-input': {
-                          textAlign: isRTL ? 'right' : 'left'
-                        }
-                      }}
-                    />
-                  )}
-                />
-              </Box>
-            </LocalizationProvider>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={isRTL ? arSA : undefined}>
+                  <DatePicker
+                    label={t('date')}
+                    value={selectedDate}
+                    onChange={(newValue) => setSelectedDate(newValue)}
+                    renderInput={(params) => <TextField {...params} fullWidth required />}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={isRTL ? arSA : undefined}>
+                  <TimePicker
+                    label={t('time')}
+                    value={selectedTime}
+                    onChange={(newValue) => setSelectedTime(newValue)}
+                    renderInput={(params) => <TextField {...params} fullWidth required />}
+                  />
+                </LocalizationProvider>
+              </Grid>
+            </Grid>
             <input
               type="file"
-              id="report-attachments"
               multiple
+              onChange={(e) => setAttachments([...e.target.files])}
               style={{ display: 'none' }}
-              onChange={handleFileUpload}
+              id="file-input"
             />
-            <label htmlFor="report-attachments">
+            <label htmlFor="file-input">
               <Button
-                component="span"
                 variant="outlined"
-                startIcon={isRTL ? null : <AttachFileIcon />}
-                endIcon={isRTL ? <AttachFileIcon /> : null}
-                sx={{
-                  minWidth: 140,
-                  fontWeight: 'medium'
-                }}
+                component="span"
+                startIcon={<AttachFileIcon />}
               >
                 {t('attachFiles')}
               </Button>
             </label>
-            {attachments.map((file, index) => (
-              <Box 
-                key={index} 
-                sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1,
-                  flexDirection: isRTL ? 'row-reverse' : 'row',
-                  px: 1
-                }}
-              >
-                <AttachFileIcon fontSize="small" />
-                <Typography variant="body2">
-                  {`${file.name} (${(file.size / 1024).toFixed(2)} KB)`}
-                </Typography>
+            {attachments.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                {attachments.map((file, index) => (
+                  <Chip
+                    key={index}
+                    label={file.name}
+                    onDelete={() => {
+                      const newAttachments = [...attachments];
+                      newAttachments.splice(index, 1);
+                      setAttachments(newAttachments);
+                    }}
+                    sx={{ mr: 1, mb: 1 }}
+                  />
+                ))}
               </Box>
-            ))}
+            )}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ 
-          p: 3, 
-          gap: 1,
-          flexDirection: isRTL ? 'row-reverse' : 'row'
-        }}>
-          <Button 
-            onClick={handleClose}
-            sx={{ 
-              minWidth: 100,
-              color: 'text.secondary'
-            }}
-          >
-            {t('cancel')}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={loading}
-            sx={{ 
-              minWidth: 100,
-              fontWeight: 'medium'
-            }}
-          >
-            {loading ? <CircularProgress size={24} /> : t(editingReport ? 'save' : 'create')}
+        <DialogActions>
+          <Button onClick={handleClose}>{t('cancel')}</Button>
+          <Button onClick={handleSubmit} variant="contained" color="primary">
+            {editingReport ? t('save') : t('create')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -692,63 +417,29 @@ const Reports = () => {
       <Dialog
         open={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
-        sx={{ 
-          '& .MuiDialog-paper': { 
-            direction: isRTL ? 'rtl' : 'ltr',
-            minWidth: { sm: '400px' }
-          }
-        }}
       >
-        <DialogTitle sx={{ 
-          fontWeight: 'bold',
-          backgroundColor: 'error.main',
-          color: 'white',
-          px: 3
-        }}>
-          {t('deleteReport')}
-        </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
+        <DialogTitle>{t('confirmDelete')}</DialogTitle>
+        <DialogContent>
           <Typography>
-            {t('deleteReportConfirmation', { title: reportToDelete?.title })}
+            {reportToDelete && t('deleteReportConfirmation', { title: reportToDelete.title })}
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ 
-          p: 3, 
-          gap: 1,
-          flexDirection: isRTL ? 'row-reverse' : 'row'
-        }}>
-          <Button 
-            onClick={() => setDeleteConfirmOpen(false)}
-            sx={{ 
-              minWidth: 100,
-              color: 'text.secondary'
-            }}
-          >
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>
             {t('cancel')}
           </Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            color="error"
-            variant="contained"
-            disabled={loading}
-            sx={{ 
-              minWidth: 100,
-              fontWeight: 'medium'
-            }}
-          >
-            {loading ? <CircularProgress size={24} /> : t('delete')}
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            {t('delete')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Success/Error Snackbar */}
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={3000}
+        autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
           {snackbar.message}
         </Alert>
       </Snackbar>

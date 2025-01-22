@@ -179,8 +179,17 @@ const Users = () => {
   }
 
   return (
-    <Box sx={{ p: 3, direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box sx={{ 
+      p: 3,
+      pt: !isRTL ? 10 : 3, 
+      direction: isRTL ? 'rtl' : 'ltr'
+    }}>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        mb: 3
+      }}>
         <Typography variant="h4">{t('users')}</Typography>
         <Button
           variant="contained"

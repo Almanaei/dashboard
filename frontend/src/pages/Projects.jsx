@@ -1,60 +1,131 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
-  Paper,
-  Typography,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
-  Chip,
+  Paper,
+  IconButton,
   TextField,
+  Select,
   MenuItem,
-  Grid
+  TablePagination,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Typography,
+  Chip,
+  Grid,
+  Card,
+  CardContent,
+  LinearProgress,
+  Avatar,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import axios from 'axios';
+import {
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Add as AddIcon,
+  Assignment as ProjectIcon,
+  CheckCircle as CompletedIcon,
+  Timeline as ProgressIcon,
+  Person as PersonIcon,
+} from '@mui/icons-material';
+import { useProjects } from '../context/ProjectContext';
+import { useLanguage } from '../context/LanguageContext';
+
+const ProjectStats = () => {
+  const { getProjectStats } = useProjects();
+  const { t } = useLanguage();
+  const stats = getProjectStats();
+
+  const statCards = [
+    {
+      title: t('totalProjects'),
+      value: stats.totalProjects,
+      icon: <ProjectIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
+      progress: null,
+    },
+    {
+      title: t('completedProjects'),
+      value: stats.completedProjects,
+      icon: <CompletedIcon sx={{ fontSize: 40, color: 'success.main' }} />,
+      progress: null,
+    },
+    {
+      title: t('inProgressProjects'),
+      value: stats.inProgressProjects,
+      icon: <ProgressIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
+      progress: null,
+    },
+    {
+      title: t('activeUsers'),
+      value: Object.keys(stats.userProjects).length,
+      icon: <PersonIcon sx={{ fontSize: 40, color: 'info.main' }} />,
+      progress: null,
+    },
+  ];
+
+  return (
+    <Grid container spacing={3} sx={{ mb: 4 }}>
+      {statCards.map((stat, index) => (
+        <Grid item xs={12} sm={6} md={3} key={index}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                {stat.icon}
+                <Typography variant="h6" sx={{ ml: 1 }}>
+                  {stat.title}
+                </Typography>
+              </Box>
+              <Typography variant="h4" component="div">
+                {stat.value}
+              </Typography>
+              {stat.progress !== null && (
+                <Box sx={{ mt: 2 }}>
+                  <LinearProgress variant="determinate" value={stat.progress} />
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+  );
+};
 
 const Projects = () => {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { projects, deleteProject } = useProjects();
+  const { t, isRTL } = useLanguage();
+  
+  // Table state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [filters, setFilters] = useState({
-    status: '',
-    priority: '',
-    search: ''
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
 
-  const fetchProjects = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5005/api/projects', {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          page: page + 1,
-          limit: rowsPerPage,
-          ...filters
-        }
-      });
-      setProjects(response.data.projects);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-      setLoading(false);
-    }
-  };
+  // Filter and sort projects
+  const filteredProjects = useMemo(() => {
+    return projects.filter(project => {
+      const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          project.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      const matchesPriority = priorityFilter === 'all' || project.priority === priorityFilter;
+      
+      return matchesSearch && matchesStatus && matchesPriority;
+    });
+  }, [projects, searchQuery, statusFilter, priorityFilter]);
 
-  useEffect(() => {
-    fetchProjects();
-  }, [page, rowsPerPage, filters]);
-
+  // Pagination handlers
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -64,135 +135,208 @@ const Projects = () => {
     setPage(0);
   };
 
-  const handleFilterChange = (field) => (event) => {
-    setFilters(prev => ({
-      ...prev,
-      [field]: event.target.value
-    }));
-    setPage(0);
+  // Delete handlers
+  const handleDeleteClick = (project) => {
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (projectToDelete) {
+      deleteProject(projectToDelete.id);
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    }
+  };
+
+  // Status chip color mapping
+  const getStatusColor = (status) => {
+    const colors = {
+      planning: 'info',
+      in_progress: 'primary',
+      completed: 'success',
+      on_hold: 'warning'
+    };
+    return colors[status] || 'default';
+  };
+
+  // Priority chip color mapping
+  const getPriorityColor = (priority) => {
+    const colors = {
+      low: 'success',
+      medium: 'warning',
+      high: 'error'
+    };
+    return colors[priority] || 'default';
   };
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Typography variant="h4">
-          Projects
+    <Box sx={{ p: 3, pt: !isRTL ? 10 : 3, direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          {t('projects')}
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => navigate('/projects/new')}
         >
-          New Project
+          {t('newProject')}
         </Button>
       </Box>
 
+      {/* Project Statistics */}
+      <ProjectStats />
+
       {/* Filters */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              label="Search"
-              value={filters.search}
-              onChange={handleFilterChange('search')}
-              size="small"
-            />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              select
-              label="Status"
-              value={filters.status}
-              onChange={handleFilterChange('status')}
-              size="small"
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="planning">Planning</MenuItem>
-              <MenuItem value="in_progress">In Progress</MenuItem>
-              <MenuItem value="completed">Completed</MenuItem>
-              <MenuItem value="on_hold">On Hold</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              select
-              label="Priority"
-              value={filters.priority}
-              onChange={handleFilterChange('priority')}
-              size="small"
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="low">Low</MenuItem>
-              <MenuItem value="medium">Medium</MenuItem>
-              <MenuItem value="high">High</MenuItem>
-            </TextField>
-          </Grid>
-        </Grid>
-      </Paper>
+      <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+        <TextField
+          label={t('search')}
+          variant="outlined"
+          size="small"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ minWidth: 200 }}
+        />
+        <Select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          size="small"
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="all">{t('all')}</MenuItem>
+          <MenuItem value="planning">{t('planning')}</MenuItem>
+          <MenuItem value="in_progress">{t('inProgress')}</MenuItem>
+          <MenuItem value="completed">{t('completed')}</MenuItem>
+          <MenuItem value="on_hold">{t('onHold')}</MenuItem>
+        </Select>
+        <Select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value)}
+          size="small"
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="all">{t('all')}</MenuItem>
+          <MenuItem value="low">{t('low')}</MenuItem>
+          <MenuItem value="medium">{t('medium')}</MenuItem>
+          <MenuItem value="high">{t('high')}</MenuItem>
+        </Select>
+      </Box>
 
       {/* Projects Table */}
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Priority</TableCell>
-                <TableCell>Start Date</TableCell>
-                <TableCell>End Date</TableCell>
-                <TableCell>Budget</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {projects.map((project) => (
-                <TableRow
-                  key={project.id}
-                  hover
-                  onClick={() => navigate(`/projects/${project.id}`)}
-                  sx={{ cursor: 'pointer' }}
-                >
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>{t('name')}</TableCell>
+              <TableCell>{t('description')}</TableCell>
+              <TableCell>{t('status')}</TableCell>
+              <TableCell>{t('priority')}</TableCell>
+              <TableCell>{t('startDate')}</TableCell>
+              <TableCell>{t('endDate')}</TableCell>
+              <TableCell>{t('user')}</TableCell>
+              <TableCell>{t('progress')}</TableCell>
+              <TableCell align="center">{t('actions')}</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredProjects
+              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+              .map((project) => (
+                <TableRow key={project.id}>
                   <TableCell>{project.name}</TableCell>
                   <TableCell>{project.description}</TableCell>
                   <TableCell>
                     <Chip
-                      label={project.status}
-                      color={project.status === 'completed' ? 'success' : 'primary'}
+                      label={t(project.status)}
+                      color={getStatusColor(project.status)}
                       size="small"
                     />
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={project.priority}
-                      color={
-                        project.priority === 'high' ? 'error' :
-                        project.priority === 'medium' ? 'warning' : 'info'
-                      }
+                      label={t(project.priority)}
+                      color={getPriorityColor(project.priority)}
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>{new Date(project.startDate).toLocaleDateString()}</TableCell>
-                  <TableCell>{new Date(project.endDate).toLocaleDateString()}</TableCell>
-                  <TableCell>${project.budget?.toLocaleString() || 0}</TableCell>
+                  <TableCell>{project.startDate}</TableCell>
+                  <TableCell>{project.endDate}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Avatar
+                        src={project.user.avatar}
+                        alt={project.user.name}
+                        sx={{ width: 24, height: 24 }}
+                      />
+                      <Typography variant="body2">
+                        {project.user.name}
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={project.progress}
+                        sx={{ flexGrow: 1, mr: 1 }}
+                      />
+                      <Typography variant="body2">
+                        {project.progress}%
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center">
+                    <IconButton
+                      onClick={() => navigate(`/projects/${project.id}/edit`)}
+                      size="small"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      onClick={() => handleDeleteClick(project)}
+                      size="small"
+                      color="error"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+          </TableBody>
+        </Table>
         <TablePagination
           component="div"
-          count={-1}
-          rowsPerPage={rowsPerPage}
+          count={filteredProjects.length}
           page={page}
           onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
           onRowsPerPageChange={handleChangeRowsPerPage}
           rowsPerPageOptions={[5, 10, 25]}
+          labelRowsPerPage={t('rowsPerPage')}
         />
-      </Paper>
+      </TableContainer>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>{t('confirmDelete')}</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {projectToDelete && t('deleteProjectConfirmation', { name: projectToDelete.name })}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>
+            {t('cancel')}
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            {t('delete')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

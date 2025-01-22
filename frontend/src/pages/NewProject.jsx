@@ -6,75 +6,66 @@ import {
   Typography,
   TextField,
   Button,
-  Grid,
   MenuItem,
-  FormHelperText
+  Grid,
+  InputAdornment,
+  Snackbar,
+  Alert
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import axios from 'axios';
+import { useLanguage } from '../context/LanguageContext';
+import { useProjects } from '../context/ProjectContext';
 
 const NewProject = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
+  const { t, isRTL } = useLanguage();
+  const { createProject } = useProjects();
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+  const [project, setProject] = useState({
     name: '',
     description: '',
     status: 'planning',
     priority: 'medium',
-    startDate: null,
-    endDate: null,
-    budget: '',
-    tags: ''
+    startDate: '',
+    endDate: '',
+    budget: ''
   });
 
   const handleChange = (field) => (event) => {
-    setFormData(prev => ({
+    setProject(prev => ({
       ...prev,
       [field]: event.target.value
     }));
   };
 
-  const handleDateChange = (field) => (date) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: date
-    }));
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        'http://localhost:5005/api/projects',
-        {
-          ...formData,
-          tags: formData.tags.split(',').map(tag => tag.trim()),
-          budget: parseFloat(formData.budget)
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
+    const newProject = {
+      ...project,
+      budget: parseFloat(project.budget)
+    };
+    createProject(newProject);
+    setSnackbar({
+      open: true,
+      message: t('projectCreated'),
+      severity: 'success'
+    });
+    setTimeout(() => {
       navigate('/projects');
-    } catch (error) {
-      setError(error.response?.data?.message || 'Error creating project');
-    } finally {
-      setLoading(false);
-    }
+    }, 1000);
   };
 
   return (
-    <Box>
-      <Typography variant="h4" sx={{ mb: 4 }}>
-        Create New Project
+    <Box sx={{ 
+      p: 3,
+      pt: !isRTL ? 10 : 3,
+      direction: isRTL ? 'rtl' : 'ltr'
+    }}>
+      <Typography variant="h4" gutterBottom>
+        {t('newProject')}
       </Typography>
 
       <Paper sx={{ p: 3 }}>
@@ -83,128 +74,114 @@ const NewProject = () => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Project Name"
-                value={formData.name}
+                label={t('name')}
+                value={project.name}
                 onChange={handleChange('name')}
                 required
               />
             </Grid>
-
             <Grid item xs={12}>
               <TextField
                 fullWidth
+                label={t('description')}
+                value={project.description}
+                onChange={handleChange('description')}
                 multiline
                 rows={4}
-                label="Description"
-                value={formData.description}
-                onChange={handleChange('description')}
-                required
               />
             </Grid>
-
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 select
-                label="Status"
-                value={formData.status}
+                label={t('status')}
+                value={project.status}
                 onChange={handleChange('status')}
                 required
               >
-                <MenuItem value="planning">Planning</MenuItem>
-                <MenuItem value="in_progress">In Progress</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="on_hold">On Hold</MenuItem>
+                <MenuItem value="planning">{t('planning')}</MenuItem>
+                <MenuItem value="in_progress">{t('inProgress')}</MenuItem>
+                <MenuItem value="completed">{t('completed')}</MenuItem>
+                <MenuItem value="on_hold">{t('onHold')}</MenuItem>
               </TextField>
             </Grid>
-
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 select
-                label="Priority"
-                value={formData.priority}
+                label={t('priority')}
+                value={project.priority}
                 onChange={handleChange('priority')}
                 required
               >
-                <MenuItem value="low">Low</MenuItem>
-                <MenuItem value="medium">Medium</MenuItem>
-                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="low">{t('low')}</MenuItem>
+                <MenuItem value="medium">{t('medium')}</MenuItem>
+                <MenuItem value="high">{t('high')}</MenuItem>
               </TextField>
             </Grid>
-
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <Grid item xs={12} sm={6}>
-                <DatePicker
-                  label="Start Date"
-                  value={formData.startDate}
-                  onChange={handleDateChange('startDate')}
-                  slotProps={{ textField: { fullWidth: true, required: true } }}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <DatePicker
-                  label="End Date"
-                  value={formData.endDate}
-                  onChange={handleDateChange('endDate')}
-                  slotProps={{ textField: { fullWidth: true, required: true } }}
-                  minDate={formData.startDate}
-                />
-              </Grid>
-            </LocalizationProvider>
-
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Budget"
+                label={t('startDate')}
+                type="date"
+                value={project.startDate}
+                onChange={handleChange('startDate')}
+                InputLabelProps={{ shrink: true }}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label={t('endDate')}
+                type="date"
+                value={project.endDate}
+                onChange={handleChange('endDate')}
+                InputLabelProps={{ shrink: true }}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label={t('budget')}
                 type="number"
-                value={formData.budget}
+                value={project.budget}
                 onChange={handleChange('budget')}
                 InputProps={{
-                  startAdornment: '$'
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
                 }}
                 required
               />
             </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Tags"
-                value={formData.tags}
-                onChange={handleChange('tags')}
-                helperText="Separate tags with commas"
-              />
-            </Grid>
-
-            {error && (
-              <Grid item xs={12}>
-                <FormHelperText error>{error}</FormHelperText>
-              </Grid>
-            )}
-
             <Grid item xs={12}>
-              <Box display="flex" gap={2}>
-                <Button
-                  variant="contained"
-                  type="submit"
-                  disabled={loading}
-                >
-                  Create Project
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                <Button onClick={() => navigate('/projects')}>
+                  {t('cancel')}
                 </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => navigate('/projects')}
-                  disabled={loading}
-                >
-                  Cancel
+                <Button type="submit" variant="contained" color="primary">
+                  {t('create')}
                 </Button>
               </Box>
             </Grid>
           </Grid>
         </form>
       </Paper>
+
+      {/* Snackbar for notifications */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={3000} 
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: isRTL ? 'left' : 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+          severity={snackbar.severity}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

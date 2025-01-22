@@ -17,7 +17,7 @@ import { useLanguage } from '@/context/LanguageContext';
 
 const Settings = () => {
   const { isDarkMode, toggleTheme } = useTheme();
-  const { language, changeLanguage, t, isRTL } = useLanguage();
+  const { language, setLanguage, t, isRTL } = useLanguage();
   
   const [settings, setSettings] = useState({
     notifications: true,
@@ -38,7 +38,7 @@ const Settings = () => {
 
   const handleLanguageChange = (event) => {
     const newLanguage = event.target.value;
-    changeLanguage(newLanguage);
+    setLanguage(newLanguage);
     setSnackbar({
       open: true,
       message: t('languageChanged'),
@@ -81,6 +81,12 @@ const Settings = () => {
             value={language}
             onChange={handleLanguageChange}
             fullWidth
+            sx={{
+              textAlign: isRTL ? 'right' : 'left',
+              '& .MuiSelect-select': {
+                textAlign: isRTL ? 'right' : 'left'
+              }
+            }}
           >
             <MenuItem value="en">English</MenuItem>
             <MenuItem value="ar">العربية</MenuItem>

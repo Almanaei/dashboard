@@ -274,7 +274,11 @@ const Dashboard = () => {
   ];
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ 
+      p: 3,
+      pt: !isRTL ? 10 : 3, 
+      direction: isRTL ? 'rtl' : 'ltr'
+    }}>
       {/* Header Section */}
       <Box sx={{ 
         display: 'flex', 

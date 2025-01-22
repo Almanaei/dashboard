@@ -56,7 +56,7 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { globalSearch, setGlobalSearch } = useSearch();
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, toggleLanguage, language } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCommandK, setIsCommandK] = useState(false);
   const [userCount, setUserCount] = useState(0);
@@ -440,6 +440,17 @@ const Layout = () => {
               gap: 1,
               order: isRTL ? 0 : 2
             }}>
+              <Button
+                size="small"
+                onClick={toggleLanguage}
+                sx={{ 
+                  minWidth: 'auto',
+                  mr: 2,
+                  textTransform: 'none'
+                }}
+              >
+                {language === 'en' ? 'العربية' : 'English'}
+              </Button>
               <IconButton size="small" onClick={handleShareClick}>
                 <ShareIcon />
               </IconButton>
