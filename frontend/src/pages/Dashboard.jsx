@@ -38,6 +38,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
+import { useLanguage } from '../context/LanguageContext';
 
 ChartJS.register(
   CategoryScale,
@@ -52,10 +53,11 @@ ChartJS.register(
 
 const Dashboard = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('M');
+  const { t, isRTL } = useLanguage();
 
   const metrics = [
     { 
-      label: 'Sales', 
+      label: t('sales'), 
       value: 5.3, 
       color: '#2196f3',
       dots: [
@@ -65,7 +67,7 @@ const Dashboard = () => {
       ]
     },
     { 
-      label: 'Profit', 
+      label: t('profit'), 
       value: 2.4, 
       color: '#f44336',
       dots: [
@@ -75,7 +77,7 @@ const Dashboard = () => {
       ]
     },
     { 
-      label: 'Customer', 
+      label: t('customers'), 
       value: 7.8, 
       color: '#2196f3',
       dots: [
@@ -126,7 +128,7 @@ const Dashboard = () => {
     labels: generateDateLabels('2023-05-02', '2025-03-15', 50),
     datasets: [
       {
-        label: 'Revenues',
+        label: t('revenues'),
         data: Array(50).fill().map(() => Math.random() * 5000 + 12000),
         borderColor: 'rgb(33, 150, 243)',
         backgroundColor: (context) => {
@@ -142,7 +144,7 @@ const Dashboard = () => {
         borderWidth: 1.5
       },
       {
-        label: 'Expenditures',
+        label: t('expenditures'),
         data: Array(50).fill().map(() => Math.random() * 3000 + 8000),
         borderColor: 'rgb(244, 67, 54)',
         backgroundColor: (context) => {
@@ -307,10 +309,10 @@ const Dashboard = () => {
                   lineHeight: 1
                 }}
               >
-                House Spectrum Ltd
+                {t('house_spectrum_ltd')}
               </Typography>
               <Chip
-                label="Certified"
+                label={t('certified')}
                 size="small"
                 sx={{
                   height: 20,
@@ -346,7 +348,7 @@ const Dashboard = () => {
               >
                 JP
               </Typography>
-              • Jessica Parker • Edited 7 hrs ago
+              • {t('jessica_parker')} • {t('edited_7_hrs_ago')}
             </Typography>
           </Box>
         </Box>
@@ -417,7 +419,7 @@ const Dashboard = () => {
       {/* Chart Section */}
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6">Consolidated budget</Typography>
+          <Typography variant="h6">{t('consolidated_budget')}</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ButtonGroup size="small">
               <Button
@@ -444,14 +446,14 @@ const Dashboard = () => {
               size="small"
               sx={{ minWidth: 'auto', px: 1 }}
             >
-              All
+              {t('all')}
             </Button>
             <Button
               variant="outlined"
               size="small"
               sx={{ minWidth: 'auto', px: 1 }}
             >
-              Custom
+              {t('custom')}
             </Button>
             <Typography
               variant="caption"
@@ -466,13 +468,13 @@ const Dashboard = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Box sx={{ width: 12, height: 2, bgcolor: '#2196f3' }} />
             <Typography variant="body2" color="text.secondary">
-              Revenues
+              {t('revenues')}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Box sx={{ width: 12, height: 2, bgcolor: '#f44336' }} />
             <Typography variant="body2" color="text.secondary">
-              Expenditures
+              {t('expenditures')}
             </Typography>
           </Box>
         </Box>
@@ -566,7 +568,7 @@ const Dashboard = () => {
             startIcon={<AddIcon />}
             sx={{ ml: 'auto' }}
           >
-            Add New
+            {t('add_new')}
           </Button>
         </Box>
 
@@ -578,14 +580,14 @@ const Dashboard = () => {
                 startIcon={<FilterIcon />}
                 sx={{ color: 'text.secondary' }}
               >
-                Filter
+                {t('filter')}
               </Button>
               <Button
                 size="small"
                 startIcon={<SortIcon />}
                 sx={{ color: 'text.secondary' }}
               >
-                Sort
+                {t('sort')}
               </Button>
               <Box
                 sx={{
@@ -597,7 +599,7 @@ const Dashboard = () => {
                 }}
               >
                 <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
-                <InputBase placeholder="Search..." />
+                <InputBase placeholder={t('search')} />
               </Box>
             </Box>
             <Box sx={{ ml: 'auto' }}>
@@ -613,12 +615,12 @@ const Dashboard = () => {
                 <TableCell padding="checkbox">
                   <input type="checkbox" />
                 </TableCell>
-                <TableCell>ID</TableCell>
-                <TableCell>Deals</TableCell>
-                <TableCell>Contact</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell align="right">Value</TableCell>
-                <TableCell>Source</TableCell>
+                <TableCell>{t('id')}</TableCell>
+                <TableCell>{t('deals')}</TableCell>
+                <TableCell>{t('contact')}</TableCell>
+                <TableCell>{t('email')}</TableCell>
+                <TableCell align="right">{t('value')}</TableCell>
+                <TableCell>{t('source')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

@@ -22,6 +22,9 @@ import {
   TextField,
   MenuItem,
   Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -32,12 +35,15 @@ import {
 } from '@mui/icons-material';
 import { getUsers, createUser, updateUser, deleteUser, updateUserStatus } from '../services/userService';
 import { useSearch } from '@/context/SearchContext';
+import { useLanguage } from '@/context/LanguageContext';
 
 const Users = () => {
+  const { t, isRTL } = useLanguage();
+  const { globalSearch } = useSearch();
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const { globalSearch } = useSearch();
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState('create'); // 'create' or 'edit'
   const [selectedUser, setSelectedUser] = useState(null);
@@ -173,15 +179,15 @@ const Users = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Users</Typography>
+        <Typography variant="h4">{t('users')}</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog('create')}
         >
-          Add User
+          {t('addUser')}
         </Button>
       </Box>
       
@@ -189,12 +195,12 @@ const Users = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>User</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Role</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Last Active</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>{t('name')}</TableCell>
+              <TableCell>{t('email')}</TableCell>
+              <TableCell>{t('role')}</TableCell>
+              <TableCell>{t('status')}</TableCell>
+              <TableCell>{t('lastActive')}</TableCell>
+              <TableCell align="right">{t('actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -214,14 +220,14 @@ const Users = () => {
                 <TableCell>{user.email}</TableCell>
                 <TableCell>
                   <Chip
-                    label={user.role}
+                    label={t(user.role.toLowerCase())}
                     size="small"
                     color={user.role === 'Admin' ? 'primary' : 'default'}
                   />
                 </TableCell>
                 <TableCell>
                   <Chip
-                    label={user.status}
+                    label={t(user.status.toLowerCase())}
                     size="small"
                     color={user.status === 'Active' ? 'success' : 'default'}
                   />
@@ -235,7 +241,7 @@ const Users = () => {
                 </TableCell>
                 <TableCell align="right">
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                    <Tooltip title={user.status === 'Active' ? 'Deactivate' : 'Activate'}>
+                    <Tooltip title={user.status === 'Active' ? t('deactivate') : t('activate')}>
                       <IconButton
                         size="small"
                         onClick={() => handleStatusToggle(user)}
@@ -244,7 +250,7 @@ const Users = () => {
                         {user.status === 'Active' ? <CheckCircleIcon /> : <BlockIcon />}
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Edit">
+                    <Tooltip title={t('edit')}>
                       <IconButton
                         size="small"
                         onClick={() => handleOpenDialog('edit', user)}
@@ -253,7 +259,7 @@ const Users = () => {
                         <EditIcon />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Delete">
+                    <Tooltip title={t('delete')}>
                       <IconButton
                         size="small"
                         onClick={() => handleDeleteClick(user)}
@@ -272,11 +278,11 @@ const Users = () => {
 
       {/* Create/Edit User Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{dialogMode === 'create' ? 'Add New User' : 'Edit User'}</DialogTitle>
+        <DialogTitle>{dialogMode === 'create' ? t('addUser') : t('editUser')}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
             <TextField
-              label="Name"
+              label={t('name')}
               name="name"
               value={formData.name}
               onChange={handleInputChange}
@@ -284,7 +290,7 @@ const Users = () => {
               required
             />
             <TextField
-              label="Email"
+              label={t('email')}
               name="email"
               type="email"
               value={formData.email}
@@ -293,7 +299,7 @@ const Users = () => {
               required
             />
             <TextField
-              label="Username"
+              label={t('username')}
               name="username"
               value={formData.username}
               onChange={handleInputChange}
@@ -302,7 +308,7 @@ const Users = () => {
             />
             {dialogMode === 'create' && (
               <TextField
-                label="Password"
+                label={t('password')}
                 name="password"
                 type="password"
                 value={formData.password}
@@ -311,50 +317,58 @@ const Users = () => {
                 required
               />
             )}
-            <TextField
-              select
-              label="Role"
-              name="role"
-              value={formData.role}
-              onChange={handleInputChange}
-              fullWidth
-            >
-              <MenuItem value="User">User</MenuItem>
-              <MenuItem value="Admin">Admin</MenuItem>
-            </TextField>
-            <TextField
-              select
-              label="Status"
-              name="status"
-              value={formData.status}
-              onChange={handleInputChange}
-              fullWidth
-            >
-              <MenuItem value="Active">Active</MenuItem>
-              <MenuItem value="Inactive">Inactive</MenuItem>
-            </TextField>
+            <FormControl fullWidth>
+              <InputLabel>{t('role')}</InputLabel>
+              <Select
+                name="role"
+                value={formData.role}
+                onChange={handleInputChange}
+                label={t('role')}
+              >
+                <MenuItem value="Admin">{t('admin')}</MenuItem>
+                <MenuItem value="User">{t('user')}</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>{t('status')}</InputLabel>
+              <Select
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                label={t('status')}
+              >
+                <MenuItem value="Active">{t('active')}</MenuItem>
+                <MenuItem value="Inactive">{t('inactive')}</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog}>
+            {t('cancel')}
+          </Button>
           <Button onClick={handleSubmit} variant="contained">
-            {dialogMode === 'create' ? 'Create' : 'Save'}
+            {dialogMode === 'create' ? t('add') : t('save')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>Delete User</DialogTitle>
+        <DialogTitle>
+          {t('deleteUser')}
+        </DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete {userToDelete?.name}? This action cannot be undone.
+            {t('deleteUserConfirmation', { name: userToDelete?.name })}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>
+            {t('cancel')}
+          </Button>
           <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
+            {t('delete')}
           </Button>
         </DialogActions>
       </Dialog>

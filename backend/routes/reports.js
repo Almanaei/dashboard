@@ -1,20 +1,20 @@
 import express from 'express';
-import multer from 'multer';
-import { fileURLToPath } from 'url';
-import { dirname, join, extname } from 'path';
-import fs from 'fs';
-import { Report, ReportAttachment } from '../models/index.js';
 import { Op } from 'sequelize';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
 import PDFDocument from 'pdfkit';
+import { Report, ReportAttachment } from '../models/index.js';
 
 const router = express.Router();
 
-// Get current directory
+// Set up file paths for ES modules
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 // Create uploads directory if it doesn't exist
-const uploadsDir = join(__dirname, '..', 'uploads');
+const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -27,7 +27,7 @@ const storage = multer.diskStorage({
   filename: function (req, file, cb) {
     // Create a unique filename while preserving the original extension
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + extname(file.originalname));
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
 
@@ -178,14 +178,36 @@ router.delete('/:id', async (req, res) => {
 router.get('/:id/pdf', async (req, res) => {
   try {
     const { id } = req.params;
-    const report = await Report.findByPk(id);
+    const report = await Report.findByPk(id, {
+      include: [{
+        model: ReportAttachment,
+        as: 'attachments'
+      }]
+    });
     
     if (!report) {
       return res.status(404).json({ message: 'Report not found' });
     }
 
     // Create a new PDF document
-    const doc = new PDFDocument();
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50,
+      bufferPages: true,
+      info: {
+        Title: report.title,
+        Author: 'Dashboard System',
+        Subject: 'Report Document',
+      }
+    });
+
+    // Handle any stream errors
+    doc.on('error', (err) => {
+      console.error('PDF generation error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Failed to generate PDF' });
+      }
+    });
     
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
@@ -194,32 +216,139 @@ router.get('/:id/pdf', async (req, res) => {
     // Pipe the PDF document to the response
     doc.pipe(res);
 
-    // Add content to the PDF
+    // Add header with logo and company name
     doc
-      .fontSize(20)
-      .text(report.title, { align: 'center' })
-      .moveDown()
-      .fontSize(12)
-      .text(`Date: ${new Date(report.date).toLocaleDateString()}`)
-      .text(`Time: ${new Date(report.time).toLocaleTimeString()}`)
+      .fontSize(24)
+      .fillColor('#1976d2')
+      .text('Dashboard System', { align: 'center' })
+      .moveDown(0.5);
+
+    // Add a horizontal line
+    doc
+      .strokeColor('#e0e0e0')
+      .lineWidth(1)
+      .moveTo(50, doc.y)
+      .lineTo(545, doc.y)
+      .stroke()
       .moveDown();
 
+    // Add report title
+    doc
+      .fontSize(20)
+      .fillColor('#000000')
+      .text(report.title, { align: 'center' })
+      .moveDown();
+
+    // Add metadata section
+    doc
+      .fontSize(12)
+      .fillColor('#666666');
+
+    // Create a table-like structure for metadata
+    const startX = 50;
+    const colWidth = 150;
+    const lineHeight = 20;
+    let currentY = doc.y;
+
+    // Date info
+    doc
+      .text('Date:', startX, currentY)
+      .fillColor('#000000')
+      .text(new Date(report.date).toLocaleDateString(), startX + colWidth, currentY);
+
+    // Time info
+    currentY += lineHeight;
+    doc
+      .fillColor('#666666')
+      .text('Time:', startX, currentY)
+      .fillColor('#000000')
+      .text(new Date(report.time).toLocaleTimeString(), startX + colWidth, currentY);
+
+    // Location info if available
     if (report.address) {
-      doc.text(`Location: ${report.address}`).moveDown();
+      currentY += lineHeight;
+      doc
+        .fillColor('#666666')
+        .text('Location:', startX, currentY)
+        .fillColor('#000000')
+        .text(report.address, startX + colWidth, currentY);
     }
 
+    // Add some space before content
+    doc.moveDown(2);
+
+    // Add content section
     doc
       .fontSize(14)
+      .fillColor('#1976d2')
       .text('Report Content', { underline: true })
       .moveDown()
       .fontSize(12)
-      .text(report.content);
+      .fillColor('#000000')
+      .text(report.content, {
+        align: 'justify',
+        columns: 1
+      })
+      .moveDown(2);
+
+    // Add attachments section if there are any
+    if (report.attachments && report.attachments.length > 0) {
+      doc
+        .fontSize(14)
+        .fillColor('#1976d2')
+        .text('Attachments', { underline: true })
+        .moveDown()
+        .fontSize(12)
+        .fillColor('#000000');
+
+      report.attachments.forEach((attachment, index) => {
+        doc.text(`${index + 1}. ${attachment.filename}`, {
+          link: attachment.url,
+          underline: true
+        });
+      });
+    }
+
+    // Get total pages before adding the footer
+    const totalPages = doc.bufferedPageRange().count;
+
+    // Add footer to all pages
+    let pageNumber = 1;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      
+      const bottomY = doc.page.height - 50;
+      
+      // Add generation timestamp
+      doc
+        .fontSize(10)
+        .fillColor('#666666')
+        .text(
+          `Generated on ${new Date().toLocaleString()}`,
+          50,
+          bottomY,
+          { align: 'center' }
+        );
+
+      // Add page numbers
+      doc
+        .text(
+          `Page ${pageNumber} of ${totalPages}`,
+          50,
+          bottomY - 20,
+          { align: 'center' }
+        );
+      
+      pageNumber++;
+    }
 
     // Finalize the PDF
     doc.end();
   } catch (error) {
     console.error('Error generating PDF:', error);
-    res.status(500).json({ message: 'Failed to generate PDF' });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to generate PDF' });
+    }
   }
 });
 

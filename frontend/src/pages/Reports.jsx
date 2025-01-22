@@ -27,27 +27,25 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  AttachFile as AttachFileIcon,
-  Close as CloseIcon,
-  Search as SearchIcon,
-  PictureAsPdf as PdfIcon,
-} from '@mui/icons-material';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { formatFileSize, getFileIcon } from '../utils/fileUtils';
 import { getReports, addReport, updateReport, deleteReport, generatePDF } from '../services/reportService';
 import debounce from 'lodash.debounce';
 import { useSearch } from '@/context/SearchContext';
+import { useLanguage } from '@/context/LanguageContext';
 
 const Reports = () => {
+  const { t, isRTL } = useLanguage();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [address, setAddress] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [editingReport, setEditingReport] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -98,18 +96,10 @@ const Reports = () => {
       setEditingReport(report);
       setTitle(report.title);
       setContent(report.content);
-      setAddress(report.address || '');
+      setAddress(report.address);
       setSelectedDate(new Date(report.date));
-      setSelectedTime(new Date(`2024-01-01T${report.time}`));
+      setSelectedTime(report.time);
       setAttachments(report.attachments || []);
-    } else {
-      setEditingReport(null);
-      setTitle('');
-      setContent('');
-      setAddress('');
-      setSelectedDate(new Date());
-      setSelectedTime(new Date());
-      setAttachments([]);
     }
     setOpen(true);
   };
@@ -120,7 +110,7 @@ const Reports = () => {
     setContent('');
     setAddress('');
     setSelectedDate(new Date());
-    setSelectedTime(new Date());
+    setSelectedTime('');
     setAttachments([]);
     setEditingReport(null);
   };
@@ -240,99 +230,253 @@ const Reports = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ 
+      p: 3, 
+      direction: isRTL ? 'rtl' : 'ltr',
+      '& *': { fontFamily: isRTL ? 'Arial, sans-serif' : 'inherit' }
+    }}>
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
           <CircularProgress />
         </Box>
       )}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Reports</Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpen()}
-            sx={{
-              bgcolor: '#2196f3',
-              '&:hover': {
-                bgcolor: '#1976d2'
-              }
-            }}
-          >
-            New Report
-          </Button>
-        </Box>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3,
+        gap: 2
+      }}>
+        <Typography 
+          variant="h4" 
+          component="h1"
+          sx={{ 
+            fontWeight: 'bold',
+            color: 'primary.main'
+          }}
+        >
+          {t('reports')}
+        </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={isRTL ? null : <AddIcon />}
+          endIcon={isRTL ? <AddIcon /> : null}
+          onClick={() => handleOpen()}
+          sx={{
+            minWidth: 140,
+            fontWeight: 'bold',
+            '&:hover': {
+              backgroundColor: 'primary.dark'
+            }
+          }}
+        >
+          {t('newReport')}
+        </Button>
       </Box>
 
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
-        <Table>
+      <TableContainer 
+        component={Paper} 
+        sx={{ 
+          width: '100%',
+          overflowX: 'auto',
+          direction: isRTL ? 'rtl' : 'ltr',
+          boxShadow: 3,
+          borderRadius: 2,
+          '& .MuiTableCell-root': {
+            borderColor: 'divider',
+            py: 2,
+            px: 2
+          }
+        }}
+      >
+        <Table sx={{ minWidth: 800 }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>Title</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Content</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Date & Time</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Attachments</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  textAlign: isRTL ? 'right' : 'left',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {t('reportTitle')}
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  textAlign: isRTL ? 'right' : 'left'
+                }}
+              >
+                {t('reportContent')}
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  textAlign: isRTL ? 'right' : 'left',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {t('reportAddress')}
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  textAlign: isRTL ? 'right' : 'left',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {t('reportDateAndTime')}
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  textAlign: isRTL ? 'right' : 'left'
+                }}
+              >
+                {t('reportAttachments')}
+              </TableCell>
+              <TableCell 
+                sx={{ 
+                  fontWeight: 'bold',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  textAlign: isRTL ? 'left' : 'right',
+                  minWidth: '150px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {t('reportActions')}
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {reports.map((report) => (
-              <TableRow key={report.id}>
-                <TableCell>{report.title}</TableCell>
-                <TableCell>{report.content}</TableCell>
-                <TableCell>{report.address}</TableCell>
-                <TableCell>
-                  {report.date} {report.time}
+              <TableRow 
+                key={report.id}
+                sx={{ 
+                  '&:hover': { 
+                    backgroundColor: 'action.hover'
+                  },
+                  '&:nth-of-type(odd)': {
+                    backgroundColor: 'action.hover'
+                  }
+                }}
+              >
+                <TableCell sx={{ 
+                  textAlign: isRTL ? 'right' : 'left',
+                  fontWeight: 'medium'
+                }}>
+                  {report.title}
                 </TableCell>
-                <TableCell>
-                  {report.attachments?.length > 0 ? (
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {report.attachments.map((file, index) => (
-                        <Chip
-                          key={index}
-                          icon={getFileIcon(file.type)}
-                          label={`${file.name} (${formatFileSize(file.size)})`}
-                          onClick={() => handleOpenFile(file.url)}
-                          sx={{ 
-                            cursor: 'pointer',
-                            '&:hover': {
-                              backgroundColor: 'primary.light'
-                            }
-                          }}
-                        />
-                      ))}
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                  {report.content}
+                </TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                  {report.address}
+                </TableCell>
+                <TableCell sx={{ 
+                  textAlign: isRTL ? 'right' : 'left',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {isRTL 
+                    ? t('reportDateTime', { 
+                        date: new Date(report.date).toLocaleDateString('ar-SA'),
+                        time: report.time
+                      })
+                    : `${report.date} ${report.time}`
+                  }
+                </TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                  {report.attachments?.map((attachment, index) => (
+                    <Box 
+                      key={index} 
+                      sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 1, 
+                        mb: 1,
+                        flexDirection: isRTL ? 'row-reverse' : 'row'
+                      }}
+                    >
+                      <AttachFileIcon fontSize="small" />
+                      <Typography variant="body2">
+                        {`${attachment.name} (${(attachment.size / 1024).toFixed(2)} KB)`}
+                      </Typography>
                     </Box>
-                  ) : (
-                    '-'
-                  )}
+                  ))}
                 </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                    <Tooltip title="Download PDF">
-                      <IconButton
-                        size="small"
+                <TableCell align={isRTL ? 'left' : 'right'}>
+                  <Box 
+                    sx={{ 
+                      display: 'flex', 
+                      gap: 1, 
+                      justifyContent: isRTL ? 'flex-start' : 'flex-end',
+                      '& .MuiIconButton-root': {
+                        visibility: 'visible',
+                        opacity: 1,
+                        padding: 1
+                      }
+                    }}
+                  >
+                    <Tooltip title={t('downloadPdf')} placement={isRTL ? 'bottom-end' : 'bottom-start'}>
+                      <IconButton 
+                        size="small" 
                         onClick={() => handleGeneratePDF(report)}
-                        color="primary"
+                        sx={{ 
+                          color: 'primary.main',
+                          backgroundColor: 'primary.lighter',
+                          '&:hover': {
+                            backgroundColor: 'primary.light',
+                            color: 'primary.dark'
+                          }
+                        }}
                       >
-                        <PdfIcon />
+                        <PictureAsPdfIcon />
                       </IconButton>
                     </Tooltip>
-                    <IconButton 
-                      size="small" 
-                      sx={{ color: '#2196f3', mr: 1 }}
-                      onClick={() => handleOpen(report)}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton 
-                      size="small" 
-                      sx={{ color: '#f44336' }}
-                      onClick={() => handleDeleteClick(report)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    <Tooltip title={t('edit')} placement={isRTL ? 'bottom-end' : 'bottom-start'}>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpen(report)}
+                        sx={{ 
+                          color: 'primary.main',
+                          backgroundColor: 'primary.lighter',
+                          '&:hover': {
+                            backgroundColor: 'primary.light',
+                            color: 'primary.dark'
+                          }
+                        }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('delete')} placement={isRTL ? 'bottom-end' : 'bottom-start'}>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteClick(report)}
+                        sx={{ 
+                          color: 'error.main',
+                          backgroundColor: 'error.lighter',
+                          '&:hover': {
+                            backgroundColor: 'error.light',
+                            color: 'error.dark'
+                          }
+                        }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 </TableCell>
               </TableRow>
@@ -342,134 +486,234 @@ const Reports = () => {
       </TableContainer>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          {editingReport ? 'Edit Report' : 'New Report'}
+      <Dialog 
+        open={open} 
+        onClose={handleClose}
+        maxWidth="sm"
+        fullWidth
+        sx={{ 
+          '& .MuiDialog-paper': { 
+            direction: isRTL ? 'rtl' : 'ltr',
+            minWidth: { sm: '600px' }
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          fontWeight: 'bold',
+          backgroundColor: 'primary.main',
+          color: 'white',
+          px: 3
+        }}>
+          {editingReport ? t('editReport') : t('newReport')}
         </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Title"
-            fullWidth
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            margin="dense"
-            label="Content"
-            fullWidth
-            multiline
-            rows={4}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            margin="dense"
-            label="Address"
-            fullWidth
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <DatePicker
-                label="Date"
-                value={selectedDate}
-                onChange={setSelectedDate}
-                sx={{ flex: 1 }}
-              />
-              <TimePicker
-                label="Time"
-                value={selectedTime}
-                onChange={setSelectedTime}
-                sx={{ flex: 1 }}
-              />
-            </Box>
-          </LocalizationProvider>
-
-          <Box sx={{ mb: 2 }}>
+        <DialogContent sx={{ p: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: 2, 
+            pt: 2,
+            '& .MuiFormLabel-root': {
+              textAlign: isRTL ? 'right' : 'left',
+              left: isRTL ? 'auto' : 12,
+              right: isRTL ? 12 : 'auto',
+              transformOrigin: isRTL ? 'right' : 'left'
+            }
+          }}>
+            <TextField
+              label={t('reportTitle')}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              fullWidth
+              required
+              sx={{ 
+                '& .MuiInputBase-input': {
+                  textAlign: isRTL ? 'right' : 'left'
+                }
+              }}
+            />
+            <TextField
+              label={t('reportContent')}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              multiline
+              rows={4}
+              fullWidth
+              required
+              sx={{ 
+                '& .MuiInputBase-input': {
+                  textAlign: isRTL ? 'right' : 'left'
+                }
+              }}
+            />
+            <TextField
+              label={t('reportAddress')}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              fullWidth
+              required
+              sx={{ 
+                '& .MuiInputBase-input': {
+                  textAlign: isRTL ? 'right' : 'left'
+                }
+              }}
+            />
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 2,
+                flexDirection: isRTL ? 'row-reverse' : 'row'
+              }}>
+                <DatePicker
+                  label={t('reportDate')}
+                  value={selectedDate}
+                  onChange={setSelectedDate}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      fullWidth
+                      sx={{ 
+                        '& .MuiInputBase-input': {
+                          textAlign: isRTL ? 'right' : 'left'
+                        }
+                      }}
+                    />
+                  )}
+                />
+                <TimePicker
+                  label={t('reportTime')}
+                  value={selectedTime}
+                  onChange={setSelectedTime}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      fullWidth
+                      sx={{ 
+                        '& .MuiInputBase-input': {
+                          textAlign: isRTL ? 'right' : 'left'
+                        }
+                      }}
+                    />
+                  )}
+                />
+              </Box>
+            </LocalizationProvider>
             <input
               type="file"
+              id="report-attachments"
               multiple
-              id="file-upload"
               style={{ display: 'none' }}
               onChange={handleFileUpload}
             />
-            <label htmlFor="file-upload">
+            <label htmlFor="report-attachments">
               <Button
                 component="span"
                 variant="outlined"
-                startIcon={<AttachFileIcon />}
-                sx={{ mb: 2 }}
+                startIcon={isRTL ? null : <AttachFileIcon />}
+                endIcon={isRTL ? <AttachFileIcon /> : null}
+                sx={{
+                  minWidth: 140,
+                  fontWeight: 'medium'
+                }}
               >
-                Attach Files
+                {t('attachFiles')}
               </Button>
             </label>
-
-            {attachments.length > 0 && (
-              <Box sx={{ mt: 2 }}>
-                {attachments.map((file, index) => (
-                  <Chip
-                    key={index}
-                    icon={getFileIcon(file.type)}
-                    label={`${file.name} (${formatFileSize(file.size)})`}
-                    onDelete={() => handleRemoveFile(index)}
-                    sx={{ m: 0.5 }}
-                  />
-                ))}
+            {attachments.map((file, index) => (
+              <Box 
+                key={index} 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1,
+                  flexDirection: isRTL ? 'row-reverse' : 'row',
+                  px: 1
+                }}
+              >
+                <AttachFileIcon fontSize="small" />
+                <Typography variant="body2">
+                  {`${file.name} (${(file.size / 1024).toFixed(2)} KB)`}
+                </Typography>
               </Box>
-            )}
+            ))}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleClose} sx={{ color: '#666666' }}>
-            Cancel
-          </Button>
+        <DialogActions sx={{ 
+          p: 3, 
+          gap: 1,
+          flexDirection: isRTL ? 'row-reverse' : 'row'
+        }}>
           <Button 
-            onClick={handleSubmit} 
-            variant="contained"
-            sx={{
-              bgcolor: '#2196f3',
-              '&:hover': {
-                bgcolor: '#1976d2'
-              }
+            onClick={handleClose}
+            sx={{ 
+              minWidth: 100,
+              color: 'text.secondary'
             }}
           >
-            {editingReport ? 'Save' : 'Create'}
+            {t('cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={loading}
+            sx={{ 
+              minWidth: 100,
+              fontWeight: 'medium'
+            }}
+          >
+            {loading ? <CircularProgress size={24} /> : t(editingReport ? 'save' : 'create')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onClose={handleDeleteCancel}>
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          Delete Report
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        sx={{ 
+          '& .MuiDialog-paper': { 
+            direction: isRTL ? 'rtl' : 'ltr',
+            minWidth: { sm: '400px' }
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          fontWeight: 'bold',
+          backgroundColor: 'error.main',
+          color: 'white',
+          px: 3
+        }}>
+          {t('deleteReport')}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: 3 }}>
           <Typography>
-            Are you sure you want to delete "{reportToDelete?.title}"? This action cannot be undone.
+            {t('deleteReportConfirmation', { title: reportToDelete?.title })}
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleDeleteCancel} sx={{ color: '#666666' }}>
-            Cancel
-          </Button>
+        <DialogActions sx={{ 
+          p: 3, 
+          gap: 1,
+          flexDirection: isRTL ? 'row-reverse' : 'row'
+        }}>
           <Button 
-            onClick={handleDeleteConfirm}
-            variant="contained" 
-            sx={{
-              bgcolor: '#f44336',
-              '&:hover': {
-                bgcolor: '#d32f2f'
-              }
+            onClick={() => setDeleteConfirmOpen(false)}
+            sx={{ 
+              minWidth: 100,
+              color: 'text.secondary'
             }}
           >
-            Delete
+            {t('cancel')}
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+            disabled={loading}
+            sx={{ 
+              minWidth: 100,
+              fontWeight: 'medium'
+            }}
+          >
+            {loading ? <CircularProgress size={24} /> : t('delete')}
           </Button>
         </DialogActions>
       </Dialog>

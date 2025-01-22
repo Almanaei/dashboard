@@ -48,14 +48,16 @@ import {
 } from '@mui/icons-material';
 import { useSearch } from '@/context/SearchContext';
 import { getUserCount } from '@/services/userService';
+import { useLanguage } from '../../context/LanguageContext';
 
 const drawerWidth = 240;
 
 const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const { globalSearch, setGlobalSearch } = useSearch();
+  const { t, isRTL } = useLanguage();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [isCommandK, setIsCommandK] = useState(false);
   const [userCount, setUserCount] = useState(0);
   
@@ -119,14 +121,31 @@ const Layout = () => {
     setManageAnchorEl(null);
   };
 
+  const handleManageOption = (option) => {
+    handleManageClose();
+    switch (option) {
+      case 'settings':
+        navigate('/settings');
+        break;
+      case 'security':
+        navigate('/security');
+        break;
+      case 'backup':
+        navigate('/backup-restore');
+        break;
+      default:
+        break;
+    }
+  };
+
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Reports', icon: <ReportsIcon />, path: '/reports' },
-    { text: 'Projects', icon: <ProjectsIcon />, path: '/projects', badge: '3/5' },
-    { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
-    { text: 'Extensions', icon: <ExtensionsIcon />, path: '/extensions' },
-    { text: 'Companies', icon: <CompaniesIcon />, path: '/companies', badge: '17' },
-    { text: 'Users', icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
+    { text: t('dashboard'), icon: <DashboardIcon />, path: '/' },
+    { text: t('reports'), icon: <ReportsIcon />, path: '/reports' },
+    { text: t('projects'), icon: <ProjectsIcon />, path: '/projects', badge: '3/5' },
+    { text: t('analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
+    { text: t('extensions'), icon: <ExtensionsIcon />, path: '/extensions' },
+    { text: t('companies'), icon: <CompaniesIcon />, path: '/companies', badge: '17' },
+    { text: t('users'), icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
   ];
 
   const drawer = (
@@ -134,7 +153,7 @@ const Layout = () => {
       <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
         <img src="/logo.svg" alt="Prody" style={{ width: 32, height: 32 }} />
         <Typography variant="h6" noWrap component="div">
-          Prody
+          {t('prody')}
         </Typography>
       </Box>
       
@@ -157,7 +176,7 @@ const Layout = () => {
           <InputBase
             id="global-search"
             sx={{ ml: 1, flex: 1 }}
-            placeholder="Search..."
+            placeholder={t('search')}
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
             onFocus={() => setIsCommandK(true)}
@@ -232,13 +251,13 @@ const Layout = () => {
           <ListItemIcon sx={{ minWidth: 40 }}>
             <HelpIcon />
           </ListItemIcon>
-          <ListItemText primary="Help center" />
+          <ListItemText primary={t('helpCenter')} />
         </ListItem>
         <ListItem button>
           <ListItemIcon sx={{ minWidth: 40 }}>
             <NotificationsIcon />
           </ListItemIcon>
-          <ListItemText primary="Notifications" />
+          <ListItemText primary={t('notifications')} />
           <Badge
             badgeContent="3"
             color="error"
@@ -261,7 +280,7 @@ const Layout = () => {
             <Typography variant="subtitle2">Ember Crest</Typography>
           </Box>
           <Typography variant="caption" color="text.secondary" display="block">
-            Starter set overview
+            {t('starterSetOverview')}
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">
             3 of 5 projects created
@@ -287,7 +306,7 @@ const Layout = () => {
             fullWidth
             sx={{ mt: 2 }}
           >
-            Get full access 
+            {t('getFullAccess')}
           </Button>
         </Box>
       </Box>
@@ -295,52 +314,147 @@ const Layout = () => {
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <AppBar
-        position="fixed"
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        minHeight: '100vh',
+        direction: isRTL ? 'rtl' : 'ltr'
+      }}
+    >
+      <Box
+        component="main"
         sx={{
+          flexGrow: 1,
+          p: 3,
+          pt: isRTL ? 10 : 3, // Extra top padding for Arabic version
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-          bgcolor: 'background.paper',
-          color: 'text.primary',
-          boxShadow: 'none',
-          borderBottom: 1,
-          borderColor: 'divider',
+          ml: { sm: isRTL ? 0 : `${drawerWidth}px` },
+          mr: { sm: isRTL ? `${drawerWidth}px` : 0 },
+          transition: theme => theme.transitions.create(['margin', 'width'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
         }}
       >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+        <AppBar
+          position="fixed"
+          sx={{
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            ml: { sm: isRTL ? 0 : `${drawerWidth}px` },
+            mr: { sm: isRTL ? `${drawerWidth}px` : 0 },
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+            boxShadow: 'none',
+            borderBottom: 1,
+            borderColor: 'divider',
+            mb: isRTL ? 4 : 0, // Add margin bottom for Arabic version
+          }}
+        >
+          <Toolbar 
+            sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              minHeight: isRTL ? 72 : 64, // Increase toolbar height for Arabic
+              py: isRTL ? 1.5 : 1, // Add extra padding for Arabic
+            }}
           >
-            <MenuIcon />
-          </IconButton>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton size="small" onClick={handleShareClick}>
-              <ShareIcon />
-            </IconButton>
-            <Typography variant="body2">Share</Typography>
-          </Box>
-
-          <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleManageClick}
-              endIcon={<MoreIcon />}
+            <IconButton
+              color="inherit"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ 
+                mr: isRTL ? 0 : 2,
+                ml: isRTL ? 2 : 0, 
+                display: { sm: 'none' } 
+              }}
             >
-              Manage
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
+              <MenuIcon />
+            </IconButton>
+
+            <Box sx={{ 
+              order: isRTL ? 2 : 0,
+              display: 'flex', 
+              gap: 1 
+            }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleManageClick}
+                startIcon={isRTL ? <MoreIcon /> : null}
+                endIcon={isRTL ? null : <MoreIcon />}
+              >
+                {t('manage')}
+              </Button>
+            </Box>
+
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1,
+              order: isRTL ? 0 : 2
+            }}>
+              <IconButton size="small" onClick={handleShareClick}>
+                <ShareIcon />
+              </IconButton>
+              <Typography variant="body2">{t('share')}</Typography>
+            </Box>
+          </Toolbar>
+        </AppBar>
+        <Outlet />
+      </Box>
+      <Box
+        component="nav"
+        sx={{
+          width: 240,
+          flexShrink: 0,
+          position: 'fixed',
+          [isRTL ? 'right' : 'left']: 0,
+          top: 0,
+          height: '100vh',
+          zIndex: (theme) => theme.zIndex.drawer
+        }}
+      >
+        {/* Mobile drawer */}
+        <Drawer
+          variant="temporary"
+          anchor={isRTL ? 'right' : 'left'}
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{
+            keepMounted: true,
+          }}
+          sx={{
+            display: { xs: 'block', sm: 'none' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              direction: isRTL ? 'rtl' : 'ltr'
+            },
+          }}
+        >
+          {drawer}
+        </Drawer>
+        {/* Desktop drawer */}
+        <Drawer
+          variant="permanent"
+          anchor={isRTL ? 'right' : 'left'}
+          sx={{
+            display: { xs: 'none', sm: 'block' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              direction: isRTL ? 'rtl' : 'ltr'
+            },
+          }}
+          open
+        >
+          {drawer}
+        </Drawer>
+      </Box>
 
       {/* Share Dialog */}
       <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)}>
-        <DialogTitle>Share Dashboard</DialogTitle>
+        <DialogTitle>{t('shareDashboard')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, mb: 2 }}>
             <TextField
@@ -358,10 +472,8 @@ const Layout = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
-          <Button variant="contained" onClick={handleCopyLink}>
-            Copy Link
-          </Button>
+          <Button onClick={() => setShareDialogOpen(false)}>{t('close')}</Button>
+          <Button variant="contained" onClick={handleCopyLink}>{t('copyLink')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -371,23 +483,23 @@ const Layout = () => {
         open={Boolean(manageAnchorEl)}
         onClose={handleManageClose}
       >
-        <MenuItem onClick={handleManageClose}>
+        <MenuItem onClick={() => handleManageOption('settings')}>
           <ListItemIcon>
             <SettingsIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Settings</ListItemText>
+          <ListItemText>{t('settings')}</ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleManageClose}>
+        <MenuItem onClick={() => handleManageOption('security')}>
           <ListItemIcon>
             <SecurityIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Security</ListItemText>
+          <ListItemText>{t('security')}</ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleManageClose}>
+        <MenuItem onClick={() => handleManageOption('backup')}>
           <ListItemIcon>
             <BackupIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Backup & Restore</ListItemText>
+          <ListItemText>{t('backup')}</ListItemText>
         </MenuItem>
       </Menu>
 
@@ -396,60 +508,12 @@ const Layout = () => {
         open={shareSnackbarOpen}
         autoHideDuration={3000}
         onClose={() => setShareSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: isRTL ? 'left' : 'right' }}
       >
         <Alert severity="success" sx={{ width: '100%' }}>
-          Link copied to clipboard!
+          {t('linkCopied')}
         </Alert>
       </Snackbar>
-
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
-        {/* Mobile drawer */}
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
-          }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
-          }}
-        >
-          {drawer}
-        </Drawer>
-        {/* Desktop drawer */}
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px',
-        }}
-      >
-        <Outlet />
-      </Box>
     </Box>
   );
 };
