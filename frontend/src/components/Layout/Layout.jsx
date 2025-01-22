@@ -208,6 +208,9 @@ const Layout = () => {
             sx={{
               borderRadius: 1,
               mb: 0.5,
+              display: 'flex',
+              flexDirection: isRTL ? 'row-reverse' : 'row',
+              textAlign: isRTL ? 'right' : 'left',
               '&.Mui-selected': {
                 bgcolor: 'primary.main',
                 color: 'white',
@@ -224,16 +227,25 @@ const Layout = () => {
               sx={{
                 minWidth: 40,
                 color: location.pathname === item.path ? 'white' : 'inherit',
+                marginRight: isRTL ? 0 : 2,
+                marginLeft: isRTL ? 2 : 0
               }}
             >
               {item.icon}
             </ListItemIcon>
-            <ListItemText primary={item.text} />
+            <ListItemText 
+              primary={item.text} 
+              sx={{
+                margin: 0,
+                textAlign: isRTL ? 'right' : 'left'
+              }}
+            />
             {item.badge && (
               <Typography
                 variant="caption"
                 sx={{
-                  ml: 1,
+                  ml: isRTL ? 0 : 1,
+                  mr: isRTL ? 1 : 0,
                   color: location.pathname === item.path ? 'white' : 'text.secondary',
                 }}
               >
@@ -247,23 +259,58 @@ const Layout = () => {
       <Divider sx={{ my: 1 }} />
 
       <List sx={{ px: 1 }}>
-        <ListItem button>
-          <ListItemIcon sx={{ minWidth: 40 }}>
+        <ListItem 
+          button
+          sx={{
+            display: 'flex',
+            flexDirection: isRTL ? 'row-reverse' : 'row',
+            textAlign: isRTL ? 'right' : 'left',
+          }}
+        >
+          <ListItemIcon sx={{ 
+            minWidth: 40,
+            marginRight: isRTL ? 0 : 2,
+            marginLeft: isRTL ? 2 : 0
+          }}>
             <HelpIcon />
           </ListItemIcon>
-          <ListItemText primary={t('helpCenter')} />
+          <ListItemText 
+            primary={t('helpCenter')} 
+            sx={{
+              margin: 0,
+              textAlign: isRTL ? 'right' : 'left'
+            }}
+          />
         </ListItem>
-        <ListItem button>
-          <ListItemIcon sx={{ minWidth: 40 }}>
+        <ListItem 
+          button
+          sx={{
+            display: 'flex',
+            flexDirection: isRTL ? 'row-reverse' : 'row',
+            textAlign: isRTL ? 'right' : 'left',
+          }}
+        >
+          <ListItemIcon sx={{ 
+            minWidth: 40,
+            marginRight: isRTL ? 0 : 2,
+            marginLeft: isRTL ? 2 : 0
+          }}>
             <NotificationsIcon />
           </ListItemIcon>
-          <ListItemText primary={t('notifications')} />
+          <ListItemText 
+            primary={t('notifications')} 
+            sx={{
+              margin: 0,
+              textAlign: isRTL ? 'right' : 'left'
+            }}
+          />
           <Badge
             badgeContent="3"
             color="error"
             sx={{
               '& .MuiBadge-badge': {
-                right: -3,
+                right: isRTL ? 'auto' : -3,
+                left: isRTL ? -3 : 'auto',
                 top: 13,
                 border: '2px solid #fff',
                 padding: '0 4px',

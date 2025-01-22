@@ -31,32 +31,50 @@ const Sidebar = () => {
   ];
 
   return (
-    <Box sx={{ height: '100%', width: '100%' }}>
+    <Box sx={{ 
+      height: '100%', 
+      width: '100%',
+      direction: isRTL ? 'rtl' : 'ltr'
+    }}>
       <Box
         sx={{
           p: 2,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: isRTL ? 'flex-end' : 'flex-start',
+          justifyContent: 'flex-start',
           borderBottom: '1px solid',
-          borderColor: 'divider'
+          borderColor: 'divider',
+          pl: isRTL ? 0 : 2,
+          pr: isRTL ? 2 : 0
         }}
       >
-        <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
+        <Typography variant="h6" component="div" sx={{ 
+          fontWeight: 'bold',
+          textAlign: isRTL ? 'right' : 'left',
+          width: '100%'
+        }}>
           {t('dashboard')}
         </Typography>
       </Box>
-      <List sx={{ width: '100%' }}>
+      <List sx={{ 
+        width: '100%',
+        '& .MuiListItem-root': {
+          display: 'flex',
+          flexDirection: isRTL ? 'row-reverse' : 'row',
+        }
+      }}>
         {menuItems.map((item) => (
-          <ListItem key={item.path} disablePadding>
+          <ListItem key={item.path} disablePadding sx={{ pr: isRTL ? 2 : 0, pl: isRTL ? 0 : 2 }}>
             <ListItemButton
               component={Link}
               to={item.path}
               selected={location.pathname === item.path}
               sx={{
                 minHeight: 48,
-                justifyContent: 'flex-end',
-                px: 2.5,
+                width: '100%',
+                display: 'flex',
+                flexDirection: isRTL ? 'row-reverse' : 'row',
+                justifyContent: 'flex-start',
                 '&.Mui-selected': {
                   backgroundColor: 'primary.main',
                   color: 'white',
@@ -69,25 +87,27 @@ const Sidebar = () => {
                 },
               }}
             >
-              <ListItemText 
-                primary={t(item.label)}
-                sx={{
-                  margin: 0,
-                  textAlign: 'right',
-                  '& .MuiTypography-root': {
-                    fontWeight: location.pathname === item.path ? 'bold' : 'regular',
-                  }
-                }}
-              />
               <ListItemIcon
                 sx={{
-                  minWidth: 0,
-                  mr: 3,
+                  minWidth: 'auto',
+                  marginRight: isRTL ? 0 : 3,
+                  marginLeft: isRTL ? 3 : 0,
                   color: location.pathname === item.path ? 'white' : 'inherit',
                 }}
               >
                 {item.icon}
               </ListItemIcon>
+              <ListItemText 
+                primary={t(item.label)}
+                sx={{
+                  margin: 0,
+                  flex: 1,
+                  '& .MuiTypography-root': {
+                    textAlign: isRTL ? 'right' : 'left',
+                    fontWeight: location.pathname === item.path ? 'bold' : 'regular',
+                  }
+                }}
+              />
             </ListItemButton>
           </ListItem>
         ))}

@@ -37,6 +37,8 @@ import { getReports, addReport, updateReport, deleteReport, generatePDF } from '
 import debounce from 'lodash.debounce';
 import { useSearch } from '@/context/SearchContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { format } from 'date-fns';
+import { arSA } from 'date-fns/locale';
 
 const Reports = () => {
   const { t, isRTL } = useLanguage();
@@ -229,6 +231,33 @@ const Reports = () => {
     }
   };
 
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isRTL) {
+      const arabicNums = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+      const day = d.getDate().toString().padStart(2, '0');
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      const year = d.getFullYear().toString();
+      
+      return `${day}/${month}/${year}`.split('').map(c => {
+        return arabicNums[c] || c;
+      }).join('');
+    }
+    return date;
+  };
+
+  const formatTime = (time) => {
+    if (!time) return '';
+    if (isRTL) {
+      const arabicNums = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+      return time.split('').map(c => {
+        return arabicNums[c] || c;
+      }).join('');
+    }
+    return time;
+  };
+
   return (
     <Box sx={{ 
       p: 3, 
@@ -389,13 +418,7 @@ const Reports = () => {
                   textAlign: isRTL ? 'right' : 'left',
                   whiteSpace: 'nowrap'
                 }}>
-                  {isRTL 
-                    ? t('reportDateTime', { 
-                        date: new Date(report.date).toLocaleDateString('ar-SA'),
-                        time: report.time
-                      })
-                    : `${report.date} ${report.time}`
-                  }
+                  {`${formatDate(report.date)} ${formatTime(report.time)}`}
                 </TableCell>
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                   {report.attachments?.map((attachment, index) => (

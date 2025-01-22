@@ -274,7 +274,7 @@ export function useLanguage() {
 }
 
 // Language Provider component
-export default function LanguageProvider({ children }) {
+export const LanguageProvider = ({ children }) => {
   const [language, setLanguage] = useState(() => {
     const savedLanguage = localStorage.getItem('language');
     return savedLanguage || 'en';
