@@ -55,7 +55,7 @@ const Sidebar = () => {
               selected={location.pathname === item.path}
               sx={{
                 minHeight: 48,
-                justifyContent: isRTL ? 'flex-end' : 'flex-start',
+                justifyContent: 'flex-end',
                 px: 2.5,
                 '&.Mui-selected': {
                   backgroundColor: 'primary.main',
@@ -73,7 +73,7 @@ const Sidebar = () => {
                 primary={t(item.label)}
                 sx={{
                   margin: 0,
-                  textAlign: isRTL ? 'right' : 'left',
+                  textAlign: 'right',
                   '& .MuiTypography-root': {
                     fontWeight: location.pathname === item.path ? 'bold' : 'regular',
                   }
@@ -82,8 +82,7 @@ const Sidebar = () => {
               <ListItemIcon
                 sx={{
                   minWidth: 0,
-                  mr: isRTL ? 3 : 0,
-                  ml: isRTL ? 0 : 3,
+                  mr: 3,
                   color: location.pathname === item.path ? 'white' : 'inherit',
                 }}
               >
