@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
+import { CssBaseline } from '@mui/material';
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Dashboard from './pages/Dashboard';
@@ -15,33 +15,42 @@ import Security from './pages/Security';
 import BackupRestore from './pages/BackupRestore';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Unauthorized from './pages/Unauthorized'; 
 import { AuthProvider } from './context/AuthContext';
 import { SearchProvider } from './context/SearchContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ProjectProvider } from './context/ProjectContext';
-
-const theme = createTheme();
+import { ThemeProvider } from './context/ThemeContext';
 
 const App = () => {
   return (
     <AuthProvider>
       <SearchProvider>
         <LanguageProvider>
-          <ThemeProvider theme={theme}>
+          <ThemeProvider>
             <ProjectProvider>
               <CssBaseline />
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/unauthorized" element={<Unauthorized />} />
                 <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                   <Route index element={<Navigate to="/dashboard" />} />
                   <Route path="dashboard" element={<Dashboard />} />
                   <Route path="projects" element={<Projects />} />
                   <Route path="projects/new" element={<NewProject />} />
                   <Route path="projects/:id" element={<ProjectDetails />} />
-                  <Route path="projects/:id/edit" element={<EditProject />} />
-                  <Route path="reports" element={<Reports />} />
-                  <Route path="users" element={<Users />} />
+                  <Route path="projects/:id/edit" element={<ProjectDetails />} />
+                  <Route path="reports" element={
+                    <ProtectedRoute requiredRole="admin">
+                      <Reports />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="users" element={
+                    <ProtectedRoute requiredRole="admin">
+                      <Users />
+                    </ProtectedRoute>
+                  } />
                   <Route path="settings" element={<Settings />} />
                   <Route path="security" element={<Security />} />
                   <Route path="backup-restore" element={<BackupRestore />} />

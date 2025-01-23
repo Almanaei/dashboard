@@ -49,6 +49,7 @@ import {
 import { useSearch } from '@/context/SearchContext';
 import { getUserCount } from '@/services/userService';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 
 const drawerWidth = 240;
 
@@ -57,6 +58,7 @@ const Layout = () => {
   const location = useLocation();
   const { globalSearch, setGlobalSearch } = useSearch();
   const { t, isRTL, toggleLanguage, language } = useLanguage();
+  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCommandK, setIsCommandK] = useState(false);
   const [userCount, setUserCount] = useState(0);
@@ -139,13 +141,19 @@ const Layout = () => {
   };
 
   const menuItems = [
-    { text: t('dashboard'), icon: <DashboardIcon />, path: '/' },
-    { text: t('reports'), icon: <ReportsIcon />, path: '/reports' },
+    { text: t('dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
     { text: t('projects'), icon: <ProjectsIcon />, path: '/projects', badge: '3/5' },
     { text: t('analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
-    { text: t('extensions'), icon: <ExtensionsIcon />, path: '/extensions' },
     { text: t('companies'), icon: <CompaniesIcon />, path: '/companies', badge: '17' },
-    { text: t('users'), icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
+    { text: t('extensions'), icon: <ExtensionsIcon />, path: '/extensions' },
+    // Admin only items
+    ...(user?.role === 'admin' ? [
+      { text: t('reports'), icon: <ReportsIcon />, path: '/reports' },
+      { text: t('users'), icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
+    ] : []),
+    // Common items
+    { text: t('settings'), icon: <SettingsIcon />, path: '/settings' },
+    { text: t('security'), icon: <SecurityIcon />, path: '/security' },
   ];
 
   const drawer = (
@@ -545,19 +553,19 @@ const Layout = () => {
           <ListItemIcon>
             <SettingsIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>{t('settings')}</ListItemText>
+          {t('settings')}
         </MenuItem>
         <MenuItem onClick={() => handleManageOption('security')}>
           <ListItemIcon>
             <SecurityIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>{t('security')}</ListItemText>
+          {t('security')}
         </MenuItem>
         <MenuItem onClick={() => handleManageOption('backup')}>
           <ListItemIcon>
             <BackupIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>{t('backup')}</ListItemText>
+          {t('backup')}
         </MenuItem>
       </Menu>
 

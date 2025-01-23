@@ -5,9 +5,14 @@ import bcrypt from 'bcrypt';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { verifyToken, requireAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 const API_URL = process.env.API_URL || 'http://localhost:5005';
+
+// Protect all user routes with authentication and admin access
+router.use(verifyToken);
+router.use(requireAdmin);
 
 // Configure multer for avatar uploads
 const storage = multer.diskStorage({
@@ -102,7 +107,7 @@ router.get('/:id', async (req, res) => {
 // Create new user
 router.post('/', async (req, res) => {
   try {
-    const { name, email, username, password, role, status } = req.body;
+    const { username, email, password, role } = req.body;
     
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -120,20 +125,25 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validate role
+    const validRoles = ['user', 'admin'];
+    const userRole = (role || 'user').toLowerCase();
+    if (!validRoles.includes(userRole)) {
+      return res.status(400).json({
+        message: 'Invalid role specified'
+      });
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Generate avatar URL
-    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`;
-
+    // Create user
     const user = await User.create({
-      name,
-      email,
       username,
+      email,
       password: hashedPassword,
-      role,
-      status,
-      avatar,
+      role: userRole,
+      status: 'Active',
       lastActive: new Date()
     });
 
@@ -150,7 +160,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, username, role, status } = req.body;
+    const { username, email, role, status, password } = req.body;
 
     const user = await User.findByPk(id);
     if (!user) {
@@ -178,22 +188,34 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    // Update avatar if name changed
-    const avatar = name !== user.name
-      ? `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`
-      : user.avatar;
+    // Validate role if provided
+    if (role) {
+      const validRoles = ['user', 'admin'];
+      const userRole = role.toLowerCase();
+      if (!validRoles.includes(userRole)) {
+        return res.status(400).json({
+          message: 'Invalid role specified'
+        });
+      }
+    }
 
-    await user.update({
-      name,
-      email,
+    // Prepare update data
+    const updateData = {
       username,
-      role,
-      status,
-      avatar
-    });
+      email,
+      role: role?.toLowerCase(),
+      status
+    };
+
+    // Add password to update data if provided
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    await user.update(updateData);
 
     const updatedUser = await User.findByPk(id, {
-      attributes: ['id', 'name', 'email', 'username', 'role', 'status', 'lastActive', 'avatar']
+      attributes: ['id', 'username', 'email', 'role', 'status', 'lastActive']
     });
 
     res.json(updatedUser);

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import bcrypt from 'bcrypt';
 
 export const register = async (req, res) => {
   try {
@@ -47,15 +48,20 @@ export const login = async (req, res) => {
     console.log('Login attempt:', { email });
 
     // Find user
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ 
+      where: { 
+        email,
+        status: 'Active'  // Only allow active users to login
+      } 
+    });
+
     if (!user) {
-      console.log('User not found:', email);
+      console.log('User not found or inactive:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    console.log('User found:', { id: user.id, email: user.email, role: user.role });
 
-    // Check password
-    const isValidPassword = await user.validatePassword(password);
+    // Check password using bcrypt directly
+    const isValidPassword = await bcrypt.compare(password, user.password);
     console.log('Password validation:', { isValid: isValidPassword });
     
     if (!isValidPassword) {
@@ -63,9 +69,15 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Update last login
+    await user.update({ lastLogin: new Date() });
+
     // Generate token
     const token = jwt.sign(
-      { userId: user.id },
+      { 
+        userId: user.id,
+        role: user.role  // Include role in token
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );

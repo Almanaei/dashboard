@@ -6,8 +6,13 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import PDFDocument from 'pdfkit';
 import { Report, ReportAttachment } from '../models/index.js';
+import { verifyToken, requireAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// Protect all report routes with authentication and admin access
+router.use(verifyToken);
+router.use(requireAdmin);
 
 // Set up file paths for ES modules
 const __filename = fileURLToPath(import.meta.url);

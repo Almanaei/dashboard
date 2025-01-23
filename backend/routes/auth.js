@@ -10,14 +10,21 @@ const router = express.Router();
 router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.userId, {
-      attributes: { exclude: ['password'] }
+      attributes: ['id', 'username', 'email', 'role']
     });
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json(user);
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -45,7 +52,8 @@ router.post('/register', async (req, res) => {
     const user = await User.create({
       username,
       email,
-      password
+      password,
+      role: 'user' // Default role
     });
 
     // Generate token
@@ -61,7 +69,8 @@ router.post('/register', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        role: user.role
       }
     });
   } catch (error) {
@@ -110,7 +119,8 @@ router.post('/login', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        role: user.role
       }
     });
   } catch (error) {

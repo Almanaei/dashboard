@@ -50,11 +50,10 @@ const Users = () => {
   const [dialogMode, setDialogMode] = useState('create'); // 'create' or 'edit'
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
     username: '',
+    email: '',
     password: '',
-    role: 'User',
+    role: 'user',
     status: 'Active',
     avatar: ''
   });
@@ -71,21 +70,18 @@ const Users = () => {
     setSelectedUser(user);
     if (user) {
       setFormData({
-        name: user.name,
-        email: user.email,
         username: user.username,
-        password: '',
+        email: user.email,
         role: user.role,
         status: user.status,
         avatar: user.avatar || ''
       });
     } else {
       setFormData({
-        name: '',
-        email: '',
         username: '',
+        email: '',
         password: '',
-        role: 'User',
+        role: 'user',
         status: 'Active',
         avatar: ''
       });
@@ -97,22 +93,13 @@ const Users = () => {
     setOpenDialog(false);
     setSelectedUser(null);
     setFormData({
-      name: '',
-      email: '',
       username: '',
+      email: '',
       password: '',
-      role: 'User',
+      role: 'user',
       status: 'Active',
       avatar: ''
     });
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
   };
 
   const handleAvatarChange = (event) => {
@@ -137,79 +124,43 @@ const Users = () => {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-
-      // Create a clean copy of form data
-      const userData = {
-        name: formData.name?.trim(),
-        email: formData.email?.trim(),
-        username: formData.username?.trim(),
-        role: formData.role,
-        status: formData.status
-      };
-
-      // Only include password if it's been set
-      if (formData.password) {
-        userData.password = formData.password;
-      }
-
-      // Handle avatar separately to avoid sending it twice
-      const avatarData = formData.avatar && formData.avatar !== selectedUser?.avatar 
-        ? formData.avatar 
-        : null;
-
-      let success = false;
-      
       if (dialogMode === 'create') {
-        // For new users, avatar is handled in createUser
-        userData.avatar = avatarData;
-        await createUser(userData);
-        success = true;
+        await createUser({
+          ...formData,
+          role: formData.role.toLowerCase()
+        });
         setSnackbar({
           open: true,
           message: t('userCreatedSuccessfully'),
           severity: 'success'
         });
       } else {
-        // For updates, handle avatar separately
-        await updateUser(selectedUser.id, userData);
-        
-        if (avatarData) {
-          try {
-            const updatedUser = await updateUserAvatar(selectedUser.id, avatarData);
-            // Notify ProjectContext about the user update
-            updateUserData(selectedUser.id, updatedUser);
-          } catch (avatarError) {
-            console.error('Error updating avatar:', avatarError);
-            setSnackbar({
-              open: true,
-              message: t('userUpdatedButAvatarFailed'),
-              severity: 'warning'
-            });
-          }
+        const { password, ...updateData } = formData;
+        if (selectedUser) {
+          await updateUser(selectedUser.id, {
+            ...updateData,
+            role: updateData.role.toLowerCase()
+          });
+          setSnackbar({
+            open: true,
+            message: t('userUpdatedSuccessfully'),
+            severity: 'success'
+          });
         }
-        
-        success = true;
-        setSnackbar({
-          open: true,
-          message: t('userUpdatedSuccessfully'),
-          severity: 'success'
-        });
       }
-
-      if (success) {
-        handleCloseDialog();
-        fetchUsers();
-      }
-    } catch (err) {
-      console.error('Error submitting user:', err);
-      setError(
-        err.response?.data?.message || 
-        t(dialogMode === 'create' ? 'failedToCreateUser' : 'failedToUpdateUser')
-      );
+      fetchUsers();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Error submitting user:', error);
+      setSnackbar({
+        open: true,
+        message: t(dialogMode === 'create' ? 'failedToCreateUser' : 'failedToUpdateUser'),
+        severity: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -400,95 +351,68 @@ const Users = () => {
       </TableContainer>
 
       {/* Create/Edit User Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{dialogMode === 'create' ? t('addUser') : t('editUser')}</DialogTitle>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {dialogMode === 'create' ? t('createNewUser') : t('editUser')}
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-              <Avatar
-                src={formData.avatar}
-                alt={formData.name}
-                sx={{ 
-                  width: 80, 
-                  height: 80,
-                  bgcolor: formData.avatar ? 'transparent' : 'primary.main',
-                  '& img': {
-                    objectFit: 'cover',
-                    width: '100%',
-                    height: '100%'
-                  }
-                }}
-              >
-                {!formData.avatar && (formData.name ? formData.name.charAt(0).toUpperCase() : '+')}
-              </Avatar>
-              <input
-                accept="image/*"
-                style={{ display: 'none' }}
-                id="avatar-upload"
-                type="file"
-                onChange={handleAvatarChange}
-              />
-              <label htmlFor="avatar-upload">
-                <Button component="span" variant="outlined">
-                  {t('changeAvatar')}
-                </Button>
-              </label>
-            </Box>
+          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
             <TextField
-              label={t('name')}
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
               fullWidth
+              label={t('username')}
+              value={formData.username}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              margin="normal"
               required
+              error={formData.username.length > 0 && formData.username.length < 3}
+              helperText={formData.username.length > 0 && formData.username.length < 3 ? t('usernameTooShort') : ''}
             />
             <TextField
+              fullWidth
               label={t('email')}
-              name="email"
               type="email"
               value={formData.email}
-              onChange={handleInputChange}
-              fullWidth
-              required
-            />
-            <TextField
-              label={t('username')}
-              name="username"
-              value={formData.username}
-              onChange={handleInputChange}
-              fullWidth
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              margin="normal"
               required
             />
             {dialogMode === 'create' && (
               <TextField
+                fullWidth
                 label={t('password')}
-                name="password"
                 type="password"
                 value={formData.password}
-                onChange={handleInputChange}
-                fullWidth
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                margin="normal"
                 required
+                error={formData.password.length > 0 && formData.password.length < 6}
+                helperText={formData.password.length > 0 && formData.password.length < 6 ? t('passwordTooShort') : ''}
               />
             )}
-            <FormControl fullWidth>
+            <FormControl fullWidth margin="normal">
               <InputLabel>{t('role')}</InputLabel>
               <Select
-                name="role"
                 value={formData.role}
-                onChange={handleInputChange}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 label={t('role')}
+                required
               >
-                <MenuItem value="Admin">{t('admin')}</MenuItem>
-                <MenuItem value="User">{t('user')}</MenuItem>
+                <MenuItem value="user">{t('user')}</MenuItem>
+                <MenuItem value="admin">{t('admin')}</MenuItem>
               </Select>
             </FormControl>
-            <FormControl fullWidth>
+            <FormControl fullWidth margin="normal">
               <InputLabel>{t('status')}</InputLabel>
               <Select
-                name="status"
                 value={formData.status}
-                onChange={handleInputChange}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 label={t('status')}
+                required
               >
                 <MenuItem value="Active">{t('active')}</MenuItem>
                 <MenuItem value="Inactive">{t('inactive')}</MenuItem>
@@ -497,11 +421,16 @@ const Users = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>
-            {t('cancel')}
-          </Button>
-          <Button onClick={handleSubmit} variant="contained">
-            {dialogMode === 'create' ? t('add') : t('save')}
+          <Button onClick={handleCloseDialog}>{t('cancel')}</Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained" 
+            disabled={loading || 
+              (formData.username.length < 3) || 
+              (dialogMode === 'create' && formData.password.length < 6)
+            }
+          >
+            {loading ? <CircularProgress size={24} /> : t(dialogMode === 'create' ? 'create' : 'update')}
           </Button>
         </DialogActions>
       </Dialog>
