@@ -239,12 +239,12 @@ const Reports = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>{t('title')}</TableCell>
-              <TableCell>{t('content')}</TableCell>
-              <TableCell>{t('address')}</TableCell>
-              <TableCell>{t('dateAndTime')}</TableCell>
-              <TableCell>{t('attachments')}</TableCell>
-              <TableCell align="right">{t('actions')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('title').charAt(0).toUpperCase() + t('title').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('content').charAt(0).toUpperCase() + t('content').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('address').charAt(0).toUpperCase() + t('address').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('dateAndTime').charAt(0).toUpperCase() + t('dateAndTime').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('attachments').charAt(0).toUpperCase() + t('attachments').slice(1)}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 600 }}>{t('actions').charAt(0).toUpperCase() + t('actions').slice(1)}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, ListItem, ListItemIcon, ListItemText, Typography, Box, ListItemButton } from '@mui/material';
+import { List, ListItem, ListItemIcon, ListItemText, Typography, Box, ListItemButton, Drawer } from '@mui/material';
 import { Link, useLocation } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -30,89 +30,90 @@ const Sidebar = () => {
     { path: '/notifications', icon: <NotificationsIcon />, label: 'notifications' }
   ];
 
+  const drawerWidth = 240;
+
   return (
-    <Box sx={{ 
-      height: '100%', 
-      width: '100%',
-      direction: isRTL ? 'rtl' : 'ltr'
-    }}>
-      <Box
-        sx={{
-          p: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          pl: isRTL ? 0 : 2,
-          pr: isRTL ? 2 : 0
-        }}
-      >
-        <Typography variant="h6" component="div" sx={{ 
-          fontWeight: 'bold',
-          textAlign: isRTL ? 'right' : 'left',
-          width: '100%'
-        }}>
-          {t('dashboard')}
-        </Typography>
-      </Box>
-      <List sx={{ 
-        width: '100%',
-        '& .MuiListItem-root': {
-          display: 'flex',
-          flexDirection: isRTL ? 'row-reverse' : 'row',
-        }
-      }}>
-        {menuItems.map((item) => (
-          <ListItem key={item.path} disablePadding sx={{ pr: isRTL ? 2 : 0, pl: isRTL ? 0 : 2 }}>
-            <ListItemButton
-              component={Link}
-              to={item.path}
-              selected={location.pathname === item.path}
+    <Drawer
+      variant="permanent"
+      anchor="left"
+      sx={{
+        width: drawerWidth,
+        flexShrink: 0,
+        '& .MuiDrawer-paper': {
+          width: drawerWidth,
+          boxSizing: 'border-box',
+          backgroundColor: 'background.paper',
+          borderRight: '1px solid',
+          borderColor: 'divider'
+        },
+      }}
+    >
+      <Box sx={{ overflow: 'auto' }}>
+        <Box
+          sx={{
+            p: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            pl: isRTL ? 0 : 2,
+            pr: isRTL ? 2 : 0
+          }}
+        >
+          <Typography variant="h6" component="div" sx={{ 
+            fontWeight: 'bold',
+            textAlign: isRTL ? 'right' : 'left',
+            width: '100%'
+          }}>
+            {t('dashboard')}
+          </Typography>
+        </Box>
+        <List>
+          {menuItems.map((item) => (
+            <ListItem
+              key={item.path}
+              disablePadding
               sx={{
-                minHeight: 48,
-                width: '100%',
-                display: 'flex',
-                flexDirection: isRTL ? 'row-reverse' : 'row',
-                justifyContent: 'flex-start',
-                '&.Mui-selected': {
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: 'primary.dark',
-                  },
-                  '& .MuiListItemIcon-root': {
-                    color: 'white',
-                  },
-                },
+                display: 'block',
+                backgroundColor: location.pathname === item.path ? 'action.selected' : 'transparent'
               }}
             >
-              <ListItemIcon
+              <ListItemButton
+                component={Link}
+                to={item.path}
                 sx={{
-                  minWidth: 'auto',
-                  marginRight: isRTL ? 0 : 3,
-                  marginLeft: isRTL ? 3 : 0,
-                  color: location.pathname === item.path ? 'white' : 'inherit',
+                  minHeight: 48,
+                  px: 2.5,
+                  py: 1.5
                 }}
               >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText 
-                primary={t(item.label)}
-                sx={{
-                  margin: 0,
-                  flex: 1,
-                  '& .MuiTypography-root': {
-                    textAlign: isRTL ? 'right' : 'left',
-                    fontWeight: location.pathname === item.path ? 'bold' : 'regular',
-                  }
-                }}
-              />
-            </ListItemButton>
-          </ListItem>
-        ))}
-      </List>
-    </Box>
+                <ListItemIcon
+                  sx={{
+                    minWidth: 0,
+                    mr: 2,
+                    justifyContent: 'center',
+                    color: location.pathname === item.path ? 'primary.main' : 'text.secondary'
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={t(item.label)}
+                  primaryTypographyProps={{
+                    sx: {
+                      fontWeight: location.pathname === item.path ? 600 : 400,
+                      color: location.pathname === item.path ? 'primary.main' : 'text.primary',
+                      fontSize: '1rem'
+                    }
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Drawer>
   );
 };
 
