@@ -224,33 +224,48 @@ const Projects = () => {
       </Box>
 
       {/* Projects Table */}
-      <TableContainer component={Paper}>
+      <TableContainer 
+        component={Paper}
+        sx={{
+          boxShadow: 2,
+          borderRadius: 2,
+          overflow: 'hidden'
+        }}
+      >
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>{t('name')}</TableCell>
-              <TableCell>{t('description')}</TableCell>
-              <TableCell>{t('status')}</TableCell>
-              <TableCell>{t('priority')}</TableCell>
-              <TableCell>{t('startDate')}</TableCell>
-              <TableCell>{t('endDate')}</TableCell>
-              <TableCell>{t('user')}</TableCell>
-              <TableCell>{t('progress')}</TableCell>
-              <TableCell align="center">{t('actions')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('name').charAt(0).toUpperCase() + t('name').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('description').charAt(0).toUpperCase() + t('description').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('status').charAt(0).toUpperCase() + t('status').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('priority').charAt(0).toUpperCase() + t('priority').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('startDate').charAt(0).toUpperCase() + t('startDate').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('endDate').charAt(0).toUpperCase() + t('endDate').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('user').charAt(0).toUpperCase() + t('user').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('progress').charAt(0).toUpperCase() + t('progress').slice(1)}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 600 }}>{t('actions').charAt(0).toUpperCase() + t('actions').slice(1)}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredProjects
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((project) => (
-                <TableRow key={project.id}>
+                <TableRow key={project.id} hover>
                   <TableCell>{project.name}</TableCell>
                   <TableCell>{project.description}</TableCell>
                   <TableCell>
                     <Chip
-                      label={t(project.status)}
+                      label={t(project.status.toLowerCase().replace(/_/g, ' ')).split(' ').map(word => 
+                        word.charAt(0).toUpperCase() + word.slice(1)
+                      ).join(' ')}
                       color={getStatusColor(project.status)}
                       size="small"
+                      sx={{
+                        minWidth: '90px',
+                        '& .MuiChip-label': {
+                          textTransform: 'none'
+                        }
+                      }}
                     />
                   </TableCell>
                   <TableCell>
@@ -270,12 +285,7 @@ const Projects = () => {
                         sx={{ 
                           width: 32, 
                           height: 32,
-                          bgcolor: project.user?.avatar ? 'transparent' : 'primary.main',
-                          '& img': {
-                            objectFit: 'cover',
-                            width: '100%',
-                            height: '100%'
-                          }
+                          bgcolor: project.user?.avatar ? 'transparent' : 'primary.main'
                         }}
                       >
                         {!project.user?.avatar && project.user?.name?.charAt(0).toUpperCase()}
@@ -293,11 +303,11 @@ const Projects = () => {
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <LinearProgress
                         variant="determinate"
                         value={project.progress}
-                        sx={{ flexGrow: 1, mr: 1 }}
+                        sx={{ flexGrow: 1 }}
                       />
                       <Typography variant="body2">
                         {project.progress}%
@@ -305,19 +315,32 @@ const Projects = () => {
                     </Box>
                   </TableCell>
                   <TableCell align="center">
-                    <IconButton
-                      onClick={() => navigate(`/projects/${project.id}/edit`)}
-                      size="small"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      onClick={() => handleDeleteClick(project)}
-                      size="small"
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                      <IconButton
+                        onClick={() => navigate(`/projects/${project.id}/edit`)}
+                        size="small"
+                        sx={{
+                          color: 'primary.main',
+                          '&:hover': {
+                            backgroundColor: 'primary.lighter'
+                          }
+                        }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => handleDeleteClick(project)}
+                        size="small"
+                        sx={{
+                          color: 'error.main',
+                          '&:hover': {
+                            backgroundColor: 'error.lighter'
+                          }
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -332,6 +355,10 @@ const Projects = () => {
           onRowsPerPageChange={handleChangeRowsPerPage}
           rowsPerPageOptions={[5, 10, 25]}
           labelRowsPerPage={t('rowsPerPage')}
+          sx={{
+            borderTop: 1,
+            borderColor: 'divider'
+          }}
         />
       </TableContainer>
 
