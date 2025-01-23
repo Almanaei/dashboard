@@ -19,6 +19,15 @@ const translations = {
     actions: 'Actions',
     email: 'Email',
     notifications: 'Notifications',
+    name: 'Name',
+    description: 'Description',
+    status: 'Status',
+    priority: 'Priority',
+    title: 'Title',
+    content: 'Content',
+    address: 'Address',
+    dateAndTime: 'Date and Time',
+    attachments: 'Attachments',
 
     // Navigation
     dashboard: 'Dashboard',
@@ -29,6 +38,7 @@ const translations = {
     extensions: 'Extensions',
     companies: 'Companies',
     helpCenter: 'Help Center',
+    notifications: 'Notifications',
     settings: 'Settings',
     security: 'Security',
     backupRestore: 'Backup & Restore',
@@ -48,16 +58,12 @@ const translations = {
     startDate: 'Start Date',
     endDate: 'End Date',
     budget: 'Budget',
-    rowsPerPage: 'Rows per page',
+    rowsPerPage: 'Rows per Page',
     confirmDelete: 'Confirm Delete',
     deleteProjectConfirmation: 'Are you sure you want to delete project "{name}"?',
-    projectSaved: 'Project saved successfully',
-    projectDeleted: 'Project deleted successfully',
-    projectCreated: 'Project created successfully',
-    name: 'Name',
-    description: 'Description',
-    status: 'Status',
-    priority: 'Priority',
+    projectSaved: 'Project Saved Successfully',
+    projectDeleted: 'Project Deleted Successfully',
+    projectCreated: 'Project Created Successfully',
 
     // Reports
     newReport: 'New Report',
@@ -69,6 +75,15 @@ const translations = {
     downloadPdf: 'Download PDF',
     editReport: 'Edit Report',
     deleteReport: 'Delete Report',
+    createdBy: 'Created By',
+    failedToLoadReports: 'Failed to Load Reports',
+    reportCreatedSuccessfully: 'Report Created Successfully',
+    reportUpdatedSuccessfully: 'Report Updated Successfully',
+    reportDeletedSuccessfully: 'Report Deleted Successfully',
+    failedToSubmitReport: 'Failed to Submit Report',
+    failedToDeleteReport: 'Failed to Delete Report',
+    failedToGeneratePDF: 'Failed to Generate PDF',
+    pdfGeneratedSuccessfully: 'PDF Generated Successfully',
 
     // Settings
     language: 'Language',
@@ -102,7 +117,30 @@ const translations = {
     deals: 'Deals',
     contact: 'Contact',
     value: 'Value',
-    source: 'Source'
+    source: 'Source',
+
+    // Users
+    userNotFound: 'User Not Found',
+    username: 'Username',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+    firstName: 'First Name',
+    lastName: 'Last Name',
+    role: 'Role',
+    active: 'Active',
+    inactive: 'Inactive',
+    lastActive: 'Last Active',
+    createdAt: 'Created At',
+    updatedAt: 'Updated At',
+
+    // Project Stats
+    totalProjects: 'Total Projects',
+    completedProjects: 'Completed Projects',
+    inProgressProjects: 'In Progress Projects',
+    activeUsers: 'Active Users',
+    projectProgress: 'Project Progress',
+    projectStats: 'Project Statistics',
+    projectOverview: 'Project Overview',
   },
   ar: {
     // Common
@@ -119,6 +157,15 @@ const translations = {
     actions: 'الإجراءات',
     email: 'البريد الإلكتروني',
     notifications: 'الإشعارات',
+    name: 'الاسم',
+    description: 'الوصف',
+    status: 'الحالة',
+    priority: 'الأولوية',
+    title: 'العنوان',
+    content: 'المحتوى',
+    address: 'العنوان',
+    dateAndTime: 'التاريخ والوقت',
+    attachments: 'المرفقات',
 
     // Navigation
     dashboard: 'لوحة التحكم',
@@ -129,6 +176,7 @@ const translations = {
     extensions: 'الامتدادات',
     companies: 'الشركات',
     helpCenter: 'مركز المساعدة',
+    notifications: 'الإشعارات',
     settings: 'الإعدادات',
     security: 'الأمان',
     backupRestore: 'النسخ الاحتياطي والاستعادة',
@@ -154,10 +202,6 @@ const translations = {
     projectSaved: 'تم حفظ المشروع بنجاح',
     projectDeleted: 'تم حذف المشروع بنجاح',
     projectCreated: 'تم إنشاء المشروع بنجاح',
-    name: 'الاسم',
-    description: 'الوصف',
-    status: 'الحالة',
-    priority: 'الأولوية',
 
     // Reports
     newReport: 'تقرير جديد',
@@ -169,6 +213,15 @@ const translations = {
     downloadPdf: 'تحميل PDF',
     editReport: 'تعديل التقرير',
     deleteReport: 'حذف التقرير',
+    createdBy: 'تم إنشاؤه بواسطة',
+    failedToLoadReports: 'فشل تحميل التقارير',
+    reportCreatedSuccessfully: 'تم إنشاء التقرير بنجاح',
+    reportUpdatedSuccessfully: 'تم تحديث التقرير بنجاح',
+    reportDeletedSuccessfully: 'تم حذف التقرير بنجاح',
+    failedToSubmitReport: 'فشل في إرسال التقرير',
+    failedToDeleteReport: 'فشل في حذف التقرير',
+    failedToGeneratePDF: 'فشل في إنشاء PDF',
+    pdfGeneratedSuccessfully: 'تم إنشاء PDF بنجاح',
 
     // Settings
     language: 'اللغة',
@@ -179,7 +232,7 @@ const translations = {
     lightMode: 'الوضع الفاتح',
     emailNotifications: 'إشعارات البريد الإلكتروني',
     pushNotifications: 'الإشعارات الفورية',
-
+    
     // Misc
     welcome: 'مرحباً',
     lastLogin: 'آخر تسجيل دخول',
@@ -202,7 +255,30 @@ const translations = {
     deals: 'الصفقات',
     contact: 'جهة الاتصال',
     value: 'القيمة',
-    source: 'المصدر'
+    source: 'المصدر',
+
+    // Users
+    userNotFound: 'المستخدم غير موجود',
+    username: 'اسم المستخدم',
+    password: 'كلمة المرور',
+    confirmPassword: 'تأكيد كلمة المرور',
+    firstName: 'الاسم الأول',
+    lastName: 'الاسم الأخير',
+    role: 'الدور',
+    active: 'نشط',
+    inactive: 'غير نشط',
+    lastActive: 'آخر نشاط',
+    createdAt: 'تم إنشاؤه في',
+    updatedAt: 'تم تحديثه في',
+
+    // Project Stats
+    totalProjects: 'إجمالي المشاريع',
+    completedProjects: 'المشاريع المكتملة',
+    inProgressProjects: 'المشاريع قيد التنفيذ',
+    activeUsers: 'المستخدمون النشطون',
+    projectProgress: 'تقدم المشروع',
+    projectStats: 'إحصائيات المشروع',
+    projectOverview: 'نظرة عامة على المشروع',
   }
 };
 

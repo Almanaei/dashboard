@@ -48,49 +48,138 @@ const ProjectStats = () => {
     {
       title: t('totalProjects'),
       value: stats.totalProjects,
-      icon: <ProjectIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
-      progress: null,
+      icon: <ProjectIcon sx={{ fontSize: 32, color: 'primary.main' }} />,
+      color: 'primary.main',
+      bgColor: 'primary.lighter',
     },
     {
       title: t('completedProjects'),
       value: stats.completedProjects,
-      icon: <CompletedIcon sx={{ fontSize: 40, color: 'success.main' }} />,
-      progress: null,
+      icon: <CompletedIcon sx={{ fontSize: 32, color: 'success.main' }} />,
+      color: 'success.main',
+      bgColor: 'success.lighter',
     },
     {
       title: t('inProgressProjects'),
       value: stats.inProgressProjects,
-      icon: <ProgressIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
-      progress: null,
+      icon: <ProgressIcon sx={{ fontSize: 32, color: 'warning.main' }} />,
+      color: 'warning.main',
+      bgColor: 'warning.lighter',
     },
     {
       title: t('activeUsers'),
       value: Object.keys(stats.userProjects).length,
-      icon: <PersonIcon sx={{ fontSize: 40, color: 'info.main' }} />,
-      progress: null,
+      icon: <PersonIcon sx={{ fontSize: 32, color: 'info.main' }} />,
+      color: 'info.main',
+      bgColor: 'info.lighter',
     },
   ];
 
   return (
     <Grid container spacing={3} sx={{ mb: 4 }}>
       {statCards.map((stat, index) => (
-        <Grid item xs={12} sm={6} md={3} key={index}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                {stat.icon}
-                <Typography variant="h6" sx={{ ml: 1 }}>
-                  {stat.title}
-                </Typography>
-              </Box>
-              <Typography variant="h4" component="div">
-                {stat.value}
-              </Typography>
-              {stat.progress !== null && (
-                <Box sx={{ mt: 2 }}>
-                  <LinearProgress variant="determinate" value={stat.progress} />
+        <Grid 
+          item 
+          xs={12} 
+          sm={6} 
+          md={3} 
+          key={index}
+          sx={{
+            display: 'flex',
+            '@media (max-width: 600px)': {
+              paddingTop: '16px',
+              paddingBottom: '16px',
+            }
+          }}
+        >
+          <Card 
+            sx={{ 
+              boxShadow: 2,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              transition: 'all 0.3s ease-in-out',
+              '&:hover': {
+                boxShadow: 4,
+                transform: 'translateY(-4px)',
+              },
+              '@keyframes fadeIn': {
+                '0%': {
+                  opacity: 0,
+                  transform: 'translateY(20px)'
+                },
+                '100%': {
+                  opacity: 1,
+                  transform: 'translateY(0)'
+                }
+              },
+              animation: 'fadeIn 0.5s ease-out',
+              animationFillMode: 'both',
+              animationDelay: `${index * 0.1}s`
+            }}
+          >
+            <CardContent 
+              sx={{ 
+                flex: 1, 
+                p: { xs: 2, sm: 3 },
+                '&:last-child': {
+                  paddingBottom: { xs: 2, sm: 3 }
+                }
+              }}
+            >
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  mb: { xs: 2, sm: 3 }
+                }}
+              >
+                <Box>
+                  <Typography 
+                    variant="h6" 
+                    sx={{ 
+                      color: 'text.secondary',
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      fontWeight: 500,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      mb: 1
+                    }}
+                  >
+                    {stat.title}
+                  </Typography>
+                  <Typography 
+                    variant="h4" 
+                    sx={{ 
+                      fontWeight: 600,
+                      color: stat.color,
+                      transition: 'color 0.3s ease',
+                      fontSize: { xs: '1.5rem', sm: '2rem' }
+                    }}
+                  >
+                    {stat.value}
+                  </Typography>
                 </Box>
-              )}
+                <Box 
+                  sx={{ 
+                    p: { xs: 1, sm: 1.5 },
+                    borderRadius: 2,
+                    backgroundColor: stat.bgColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      transform: 'scale(1.1)',
+                      backgroundColor: `${stat.bgColor}`,
+                    }
+                  }}
+                >
+                  {stat.icon}
+                </Box>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -235,15 +324,15 @@ const Projects = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>{t('name').charAt(0).toUpperCase() + t('name').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('description').charAt(0).toUpperCase() + t('description').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('status').charAt(0).toUpperCase() + t('status').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('priority').charAt(0).toUpperCase() + t('priority').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('startDate').charAt(0).toUpperCase() + t('startDate').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('endDate').charAt(0).toUpperCase() + t('endDate').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('user').charAt(0).toUpperCase() + t('user').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('progress').charAt(0).toUpperCase() + t('progress').slice(1)}</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 600 }}>{t('actions').charAt(0).toUpperCase() + t('actions').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('name')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('description')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('status')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('priority')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('startDate')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('endDate')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('user')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('progress')}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 600 }}>{t('actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

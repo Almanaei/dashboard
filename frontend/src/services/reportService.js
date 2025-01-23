@@ -22,6 +22,8 @@ export const addReport = async (report) => {
     formData.append('address', report.address || '');
     formData.append('date', report.date);
     formData.append('time', report.time);
+    formData.append('userId', report.userId);
+    formData.append('userName', report.userName);
 
     // Append attachments if any
     if (report.attachments) {
@@ -50,11 +52,14 @@ export const updateReport = async (report) => {
     formData.append('address', report.address || '');
     formData.append('date', report.date);
     formData.append('time', report.time);
+    formData.append('userId', report.userId);
+    formData.append('userName', report.userName);
 
-    // Append attachments if any
     if (report.attachments) {
       report.attachments.forEach(file => {
-        formData.append('attachments', file);
+        if (file instanceof File) {
+          formData.append('attachments', file);
+        }
       });
     }
 

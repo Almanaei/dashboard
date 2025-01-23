@@ -41,11 +41,13 @@ import { getReports, addReport, updateReport, deleteReport, generatePDF } from '
 import debounce from 'lodash.debounce';
 import { useSearch } from '@/context/SearchContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { arSA } from 'date-fns/locale';
 
 const Reports = () => {
   const { t, isRTL } = useLanguage();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -81,7 +83,10 @@ const Reports = () => {
     setLoading(true);
     try {
       const data = await getReports(globalSearch);
-      setReports(data);
+      const filteredReports = user.role === 'Admin' 
+        ? data 
+        : data.filter(report => report.userId === user.id);
+      setReports(filteredReports);
       setError(null);
     } catch (err) {
       setError('Failed to load reports');
@@ -125,6 +130,8 @@ const Reports = () => {
     formData.append('address', address);
     formData.append('date', format(selectedDate, 'yyyy-MM-dd'));
     formData.append('time', selectedTime);
+    formData.append('userId', user.id);
+    formData.append('userName', user.name);
     attachments.forEach(file => {
       if (file instanceof File) {
         formData.append('attachments', file);
@@ -239,12 +246,15 @@ const Reports = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>{t('title').charAt(0).toUpperCase() + t('title').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('content').charAt(0).toUpperCase() + t('content').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('address').charAt(0).toUpperCase() + t('address').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('dateAndTime').charAt(0).toUpperCase() + t('dateAndTime').slice(1)}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('attachments').charAt(0).toUpperCase() + t('attachments').slice(1)}</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 600 }}>{t('actions').charAt(0).toUpperCase() + t('actions').slice(1)}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('title')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('content')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('address')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('dateAndTime')}</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>{t('attachments')}</TableCell>
+              {user.role === 'Admin' && (
+                <TableCell sx={{ fontWeight: 600 }}>{t('createdBy')}</TableCell>
+              )}
+              <TableCell align="center" sx={{ fontWeight: 600 }}>{t('actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -282,8 +292,37 @@ const Reports = () => {
                     />
                   ))}
                 </TableCell>
-                <TableCell align="right">
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                {user.role === 'Admin' && (
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {report.userName}
+                    </Typography>
+                  </TableCell>
+                )}
+                <TableCell align="center">
+                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                    {(user.role === 'Admin' || report.userId === user.id) && (
+                      <>
+                        <Tooltip title={t('edit')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpen(report)}
+                            color="primary"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('delete')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteClick(report)}
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </>
+                    )}
                     <Tooltip title={t('generatePDF')}>
                       <IconButton
                         size="small"
@@ -291,24 +330,6 @@ const Reports = () => {
                         color="primary"
                       >
                         <PictureAsPdfIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('edit')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpen(report)}
-                        color="primary"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('delete')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteClick(report)}
-                        color="error"
-                      >
-                        <DeleteIcon />
                       </IconButton>
                     </Tooltip>
                   </Box>
