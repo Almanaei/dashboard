@@ -2,8 +2,43 @@ import express from 'express';
 import db, { User } from '../models/index.js';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
+const API_URL = process.env.API_URL || 'http://localhost:5005';
+
+// Configure multer for avatar uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = 'uploads/avatars';
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.'));
+    }
+  }
+});
 
 // Get user count
 router.get('/count', async (req, res) => {
@@ -42,6 +77,25 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ message: 'Failed to fetch users' });
+  }
+});
+
+// Get single user by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findByPk(id, {
+      attributes: ['id', 'name', 'email', 'username', 'role', 'status', 'lastActive', 'avatar']
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Failed to fetch user' });
   }
 });
 
@@ -146,6 +200,43 @@ router.put('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({ message: 'Failed to update user' });
+  }
+});
+
+// Update user avatar
+router.put('/:id/avatar', upload.single('avatar'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findByPk(id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No avatar file provided' });
+    }
+
+    // Delete old avatar file if it exists and isn't a URL
+    if (user.avatar && user.avatar.startsWith('/uploads')) {
+      const oldAvatarPath = path.join(process.cwd(), user.avatar);
+      if (fs.existsSync(oldAvatarPath)) {
+        fs.unlinkSync(oldAvatarPath);
+      }
+    }
+
+    // Update user's avatar path with full URL
+    const avatarUrl = API_URL + '/' + req.file.path.replace(/\\/g, '/');
+    await user.update({ avatar: avatarUrl });
+
+    const updatedUser = await User.findByPk(id, {
+      attributes: ['id', 'name', 'email', 'username', 'role', 'status', 'lastActive', 'avatar']
+    });
+
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user avatar:', error);
+    res.status(500).json({ message: 'Failed to update avatar' });
   }
 });
 

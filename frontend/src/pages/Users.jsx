@@ -33,13 +33,15 @@ import {
   Block as BlockIcon,
   CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
-import { getUsers, createUser, updateUser, deleteUser, updateUserStatus } from '../services/userService';
+import { getUsers, createUser, updateUser, updateUserAvatar, deleteUser, updateUserStatus } from '../services/userService';
 import { useSearch } from '@/context/SearchContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useProjects } from '../context/ProjectContext';
 
 const Users = () => {
   const { t, isRTL } = useLanguage();
   const { globalSearch } = useSearch();
+  const { updateUserData } = useProjects();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -54,9 +56,15 @@ const Users = () => {
     password: '',
     role: 'User',
     status: 'Active',
+    avatar: ''
   });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
 
   const handleOpenDialog = (mode, user = null) => {
     setDialogMode(mode);
@@ -69,6 +77,7 @@ const Users = () => {
         password: '',
         role: user.role,
         status: user.status,
+        avatar: user.avatar || ''
       });
     } else {
       setFormData({
@@ -78,6 +87,7 @@ const Users = () => {
         password: '',
         role: 'User',
         status: 'Active',
+        avatar: ''
       });
     }
     setOpenDialog(true);
@@ -93,6 +103,7 @@ const Users = () => {
       password: '',
       role: 'User',
       status: 'Active',
+      avatar: ''
     });
   };
 
@@ -104,17 +115,103 @@ const Users = () => {
     }));
   };
 
+  const handleAvatarChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setError(t('avatarSizeError'));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({
+          ...prev,
+          avatar: reader.result
+        }));
+      };
+      reader.onerror = () => {
+        setError(t('avatarUploadError'));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
-      if (dialogMode === 'create') {
-        await createUser(formData);
-      } else {
-        await updateUser(selectedUser.id, formData);
+      setLoading(true);
+      setError(null);
+
+      // Create a clean copy of form data
+      const userData = {
+        name: formData.name?.trim(),
+        email: formData.email?.trim(),
+        username: formData.username?.trim(),
+        role: formData.role,
+        status: formData.status
+      };
+
+      // Only include password if it's been set
+      if (formData.password) {
+        userData.password = formData.password;
       }
-      handleCloseDialog();
-      fetchUsers();
+
+      // Handle avatar separately to avoid sending it twice
+      const avatarData = formData.avatar && formData.avatar !== selectedUser?.avatar 
+        ? formData.avatar 
+        : null;
+
+      let success = false;
+      
+      if (dialogMode === 'create') {
+        // For new users, avatar is handled in createUser
+        userData.avatar = avatarData;
+        await createUser(userData);
+        success = true;
+        setSnackbar({
+          open: true,
+          message: t('userCreatedSuccessfully'),
+          severity: 'success'
+        });
+      } else {
+        // For updates, handle avatar separately
+        await updateUser(selectedUser.id, userData);
+        
+        if (avatarData) {
+          try {
+            const updatedUser = await updateUserAvatar(selectedUser.id, avatarData);
+            // Notify ProjectContext about the user update
+            updateUserData(selectedUser.id, updatedUser);
+          } catch (avatarError) {
+            console.error('Error updating avatar:', avatarError);
+            setSnackbar({
+              open: true,
+              message: t('userUpdatedButAvatarFailed'),
+              severity: 'warning'
+            });
+          }
+        }
+        
+        success = true;
+        setSnackbar({
+          open: true,
+          message: t('userUpdatedSuccessfully'),
+          severity: 'success'
+        });
+      }
+
+      if (success) {
+        handleCloseDialog();
+        fetchUsers();
+      }
     } catch (err) {
-      setError(dialogMode === 'create' ? 'Failed to create user' : 'Failed to update user');
+      console.error('Error submitting user:', err);
+      setError(
+        err.response?.data?.message || 
+        t(dialogMode === 'create' ? 'failedToCreateUser' : 'failedToUpdateUser')
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -217,9 +314,26 @@ const Users = () => {
               <TableRow key={user.id} hover>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar src={user.avatar}>{user.name.charAt(0)}</Avatar>
+                    <Avatar 
+                      src={user.avatar} 
+                      alt={user.name}
+                      sx={{ 
+                        width: 40, 
+                        height: 40,
+                        bgcolor: user.avatar ? 'transparent' : 'primary.main',
+                        '& img': {
+                          objectFit: 'cover',
+                          width: '100%',
+                          height: '100%'
+                        }
+                      }}
+                    >
+                      {!user.avatar && user.name.charAt(0).toUpperCase()}
+                    </Avatar>
                     <Box>
-                      <Typography variant="body1">{user.name}</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                        {user.name}
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         @{user.username}
                       </Typography>
@@ -290,6 +404,36 @@ const Users = () => {
         <DialogTitle>{dialogMode === 'create' ? t('addUser') : t('editUser')}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Avatar
+                src={formData.avatar}
+                alt={formData.name}
+                sx={{ 
+                  width: 80, 
+                  height: 80,
+                  bgcolor: formData.avatar ? 'transparent' : 'primary.main',
+                  '& img': {
+                    objectFit: 'cover',
+                    width: '100%',
+                    height: '100%'
+                  }
+                }}
+              >
+                {!formData.avatar && (formData.name ? formData.name.charAt(0).toUpperCase() : '+')}
+              </Avatar>
+              <input
+                accept="image/*"
+                style={{ display: 'none' }}
+                id="avatar-upload"
+                type="file"
+                onChange={handleAvatarChange}
+              />
+              <label htmlFor="avatar-upload">
+                <Button component="span" variant="outlined">
+                  {t('changeAvatar')}
+                </Button>
+              </label>
+            </Box>
             <TextField
               label={t('name')}
               name="name"

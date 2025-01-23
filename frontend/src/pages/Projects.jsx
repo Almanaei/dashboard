@@ -265,13 +265,31 @@ const Projects = () => {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Avatar
-                        src={project.user.avatar}
-                        alt={project.user.name}
-                        sx={{ width: 24, height: 24 }}
-                      />
-                      <Typography variant="body2">
-                        {project.user.name}
-                      </Typography>
+                        src={`${project.user?.avatar}`}
+                        alt={project.user?.name}
+                        sx={{ 
+                          width: 32, 
+                          height: 32,
+                          bgcolor: project.user?.avatar ? 'transparent' : 'primary.main',
+                          '& img': {
+                            objectFit: 'cover',
+                            width: '100%',
+                            height: '100%'
+                          }
+                        }}
+                      >
+                        {!project.user?.avatar && project.user?.name?.charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {project.user?.name || t('userNotFound')}
+                        </Typography>
+                        {project.user?.username && (
+                          <Typography variant="caption" color="text.secondary">
+                            @{project.user.username}
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
                   </TableCell>
                   <TableCell>
