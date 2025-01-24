@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useTheme } from '@mui/material/styles';
 import {
   Box,
   Drawer,
@@ -12,6 +13,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  ListItemButton,
   Badge,
   InputBase,
   Paper,
@@ -54,6 +56,7 @@ import { useAuth } from '../../context/AuthContext';
 const drawerWidth = 240;
 
 const Layout = () => {
+  const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const { globalSearch, setGlobalSearch } = useSearch();
@@ -151,9 +154,6 @@ const Layout = () => {
       { text: t('reports'), icon: <ReportsIcon />, path: '/reports' },
       { text: t('users'), icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
     ] : []),
-    // Common items
-    { text: t('settings'), icon: <SettingsIcon />, path: '/settings' },
-    { text: t('security'), icon: <SecurityIcon />, path: '/security' },
   ];
 
   const drawer = (
@@ -209,57 +209,63 @@ const Layout = () => {
       <List sx={{ flex: 1, px: 1 }}>
         {menuItems.map((item) => (
           <ListItem
-            button
-            key={item.text}
-            onClick={() => navigate(item.path)}
-            selected={location.pathname === item.path}
+            key={item.path}
+            disablePadding
             sx={{
-              borderRadius: 1,
               mb: 0.5,
-              display: 'flex',
-              flexDirection: isRTL ? 'row-reverse' : 'row',
-              textAlign: isRTL ? 'right' : 'left',
-              '&.Mui-selected': {
-                bgcolor: 'primary.main',
-                color: 'white',
-                '&:hover': {
-                  bgcolor: 'primary.dark',
-                },
-                '& .MuiListItemIcon-root': {
-                  color: 'white',
-                },
+              display: 'block',
+              borderRadius: 1,
+              bgcolor: location.pathname === item.path ? 'action.selected' : 'transparent',
+              '&:hover': {
+                bgcolor: 'action.hover',
               },
             }}
           >
-            <ListItemIcon
+            <ListItemButton
+              onClick={() => navigate(item.path)}
               sx={{
-                minWidth: 40,
-                color: location.pathname === item.path ? 'white' : 'inherit',
-                marginRight: isRTL ? 0 : 2,
-                marginLeft: isRTL ? 2 : 0
+                minHeight: 48,
+                justifyContent: 'initial',
+                px: 2.5,
+                position: 'relative', // Added for badge positioning
               }}
             >
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText 
-              primary={item.text} 
-              sx={{
-                margin: 0,
-                textAlign: isRTL ? 'right' : 'left'
-              }}
-            />
-            {item.badge && (
-              <Typography
-                variant="caption"
+              <ListItemIcon
                 sx={{
-                  ml: isRTL ? 0 : 1,
-                  mr: isRTL ? 1 : 0,
-                  color: location.pathname === item.path ? 'white' : 'text.secondary',
+                  minWidth: 0,
+                  mr: 2,
+                  justifyContent: 'center',
                 }}
               >
-                {item.badge}
-              </Typography>
-            )}
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText 
+                primary={item.text}
+                sx={{ opacity: 1 }}
+              />
+              {item.badge && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    right: 16,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                  }}
+                >
+                  <Badge
+                    badgeContent={item.badge}
+                    color="primary"
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        position: 'relative',
+                        transform: 'none',
+                        border: `2px solid ${theme.palette.background.paper}`,
+                      },
+                    }}
+                  />
+                </Box>
+              )}
+            </ListItemButton>
           </ListItem>
         ))}
       </List>
@@ -267,64 +273,69 @@ const Layout = () => {
       <Divider sx={{ my: 1 }} />
 
       <List sx={{ px: 1 }}>
-        <ListItem 
-          button
-          sx={{
-            display: 'flex',
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-            textAlign: isRTL ? 'right' : 'left',
-          }}
-        >
-          <ListItemIcon sx={{ 
-            minWidth: 40,
-            marginRight: isRTL ? 0 : 2,
-            marginLeft: isRTL ? 2 : 0
-          }}>
-            <HelpIcon />
-          </ListItemIcon>
-          <ListItemText 
-            primary={t('helpCenter')} 
+        <ListItem disablePadding>
+          <ListItemButton
             sx={{
-              margin: 0,
-              textAlign: isRTL ? 'right' : 'left'
+              borderRadius: 1,
+              mb: 0.5,
+              display: 'flex',
+              flexDirection: isRTL ? 'row-reverse' : 'row',
+              textAlign: isRTL ? 'right' : 'left',
             }}
-          />
+          >
+            <ListItemIcon sx={{ 
+              minWidth: 40,
+              marginRight: isRTL ? 0 : 2,
+              marginLeft: isRTL ? 2 : 0
+            }}>
+              <HelpIcon />
+            </ListItemIcon>
+            <ListItemText 
+              primary={t('helpCenter')} 
+              sx={{
+                margin: 0,
+                textAlign: isRTL ? 'right' : 'left'
+              }}
+            />
+          </ListItemButton>
         </ListItem>
-        <ListItem 
-          button
-          sx={{
-            display: 'flex',
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-            textAlign: isRTL ? 'right' : 'left',
-          }}
-        >
-          <ListItemIcon sx={{ 
-            minWidth: 40,
-            marginRight: isRTL ? 0 : 2,
-            marginLeft: isRTL ? 2 : 0
-          }}>
-            <NotificationsIcon />
-          </ListItemIcon>
-          <ListItemText 
-            primary={t('notifications')} 
+        <ListItem disablePadding>
+          <ListItemButton
             sx={{
-              margin: 0,
-              textAlign: isRTL ? 'right' : 'left'
+              borderRadius: 1,
+              display: 'flex',
+              flexDirection: isRTL ? 'row-reverse' : 'row',
+              textAlign: isRTL ? 'right' : 'left',
             }}
-          />
-          <Badge
-            badgeContent="3"
-            color="error"
-            sx={{
-              '& .MuiBadge-badge': {
-                right: isRTL ? 'auto' : -3,
-                left: isRTL ? -3 : 'auto',
-                top: 13,
-                border: '2px solid #fff',
-                padding: '0 4px',
-              },
-            }}
-          />
+          >
+            <ListItemIcon sx={{ 
+              minWidth: 40,
+              marginRight: isRTL ? 0 : 2,
+              marginLeft: isRTL ? 2 : 0
+            }}>
+              <NotificationsIcon />
+            </ListItemIcon>
+            <ListItemText 
+              primary={t('notifications')} 
+              sx={{
+                margin: 0,
+                textAlign: isRTL ? 'right' : 'left'
+              }}
+            />
+            <Badge
+              badgeContent="3"
+              color="error"
+              sx={{
+                '& .MuiBadge-badge': {
+                  right: isRTL ? 'auto' : -3,
+                  left: isRTL ? -3 : 'auto',
+                  top: 13,
+                  border: `2px solid ${theme.palette.background.paper}`,
+                  padding: '0 4px',
+                },
+              }}
+            />
+          </ListItemButton>
         </ListItem>
       </List>
 
@@ -385,7 +396,7 @@ const Layout = () => {
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: isRTL ? 0 : `${drawerWidth}px` },
           mr: { sm: isRTL ? `${drawerWidth}px` : 0 },
-          transition: theme => theme.transitions.create(['margin', 'width'], {
+          transition: theme.transitions.create(['margin', 'width'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
