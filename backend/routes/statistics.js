@@ -1,15 +1,23 @@
 import express from 'express';
-import { authenticate } from '../middleware/auth.js';
+import { verifyToken } from '../middleware/authMiddleware.js';
 import {
   getProjectStats,
   getProjectTrends,
-  getProjectPerformance
+  getProjectPerformance,
+  getDashboardStats,
+  getUserStats
 } from '../controllers/StatisticsController.js';
 
 const router = express.Router();
 
 // All routes are protected
-router.use(authenticate);
+router.use(verifyToken);
+
+// Get dashboard statistics
+router.get('/dashboard', getDashboardStats);
+
+// Get user statistics
+router.get('/users', getUserStats);
 
 // Get project overview statistics
 router.get('/projects/overview', getProjectStats);

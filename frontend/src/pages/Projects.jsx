@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -39,10 +39,36 @@ import {
 import { useProjects } from '../context/ProjectContext';
 import { useLanguage } from '../context/LanguageContext';
 
+// Update date formatting function
+const formatDate = (date) => {
+  if (!date) return '-';
+  try {
+    const dateObj = new Date(date);
+    if (isNaN(dateObj.getTime())) return '-';
+    
+    const options = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric'
+    };
+    return dateObj.toLocaleDateString(undefined, options);
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '-';
+  }
+};
+
 const ProjectStats = () => {
   const { getProjectStats } = useProjects();
   const { t } = useLanguage();
-  const stats = getProjectStats();
+  
+  // Get stats and handle potential undefined
+  const stats = getProjectStats() || {
+    totalProjects: 0,
+    completedProjects: 0,
+    inProgressProjects: 0,
+    userProjects: {}
+  };
 
   const statCards = [
     {
@@ -68,7 +94,7 @@ const ProjectStats = () => {
     },
     {
       title: t('activeUsers'),
-      value: Object.keys(stats.userProjects).length,
+      value: Object.keys(stats.userProjects || {}).length,
       icon: <PersonIcon sx={{ fontSize: 32, color: 'info.main' }} />,
       color: 'info.main',
       bgColor: 'info.lighter',
@@ -99,87 +125,43 @@ const ProjectStats = () => {
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
-              transition: 'all 0.3s ease-in-out',
+              overflow: 'hidden',
               '&:hover': {
                 boxShadow: 4,
-                transform: 'translateY(-4px)',
-              },
-              '@keyframes fadeIn': {
-                '0%': {
-                  opacity: 0,
-                  transform: 'translateY(20px)'
-                },
-                '100%': {
-                  opacity: 1,
-                  transform: 'translateY(0)'
-                }
-              },
-              animation: 'fadeIn 0.5s ease-out',
-              animationFillMode: 'both',
-              animationDelay: `${index * 0.1}s`
+                transform: 'translateY(-2px)',
+                transition: 'all 0.3s'
+              }
             }}
           >
-            <CardContent 
-              sx={{ 
-                flex: 1, 
-                p: { xs: 2, sm: 3 },
-                '&:last-child': {
-                  paddingBottom: { xs: 2, sm: 3 }
-                }
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                width: '100px',
+                height: '100px',
+                background: stat.bgColor,
+                opacity: 0.1,
+                borderRadius: '0 0 0 100%'
               }}
-            >
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  mb: { xs: 2, sm: 3 }
-                }}
-              >
-                <Box>
-                  <Typography 
-                    variant="h6" 
-                    sx={{ 
-                      color: 'text.secondary',
-                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                      fontWeight: 500,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                      mb: 1
-                    }}
-                  >
-                    {stat.title}
-                  </Typography>
-                  <Typography 
-                    variant="h4" 
-                    sx={{ 
-                      fontWeight: 600,
-                      color: stat.color,
-                      transition: 'color 0.3s ease',
-                      fontSize: { xs: '1.5rem', sm: '2rem' }
-                    }}
-                  >
-                    {stat.value}
-                  </Typography>
-                </Box>
-                <Box 
-                  sx={{ 
-                    p: { xs: 1, sm: 1.5 },
-                    borderRadius: 2,
-                    backgroundColor: stat.bgColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      transform: 'scale(1.1)',
-                      backgroundColor: `${stat.bgColor}`,
-                    }
+            />
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Avatar
+                  sx={{
+                    bgcolor: stat.bgColor,
+                    mr: 2
                   }}
                 >
                   {stat.icon}
-                </Box>
+                </Avatar>
+                <Typography variant="h6" color={stat.color}>
+                  {stat.title}
+                </Typography>
               </Box>
+              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                {stat.value}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -190,8 +172,35 @@ const ProjectStats = () => {
 
 const Projects = () => {
   const navigate = useNavigate();
-  const { projects, deleteProject } = useProjects();
+  const { projects, deleteProject, refreshProjects } = useProjects();
   const { t, isRTL } = useLanguage();
+  const API_URL = 'http://localhost:5005';
+  
+  // Helper function to get avatar URL
+  const getAvatarUrl = (avatarPath) => {
+    if (!avatarPath) return undefined;
+    
+    console.log('Processing avatar path:', avatarPath);
+    
+    if (avatarPath.startsWith('data:')) return avatarPath;
+    
+    // If the path already starts with http://, return it as is
+    if (avatarPath.startsWith('http://')) return avatarPath;
+    
+    // Clean up the path by removing any duplicate URL prefixes
+    const cleanPath = avatarPath.replace(/^http:\/\/localhost:5005\//, '').replace(/^uploads\//, '');
+    const finalUrl = `${API_URL}/uploads/${cleanPath}`;
+    
+    console.log('Final avatar URL:', finalUrl);
+    return finalUrl;
+  };
+
+  // Refresh projects when component mounts
+  useEffect(() => {
+    refreshProjects();
+  }, [refreshProjects]);
+  
+  console.log('Projects component - received projects:', projects);
   
   // Table state
   const [page, setPage] = useState(0);
@@ -204,14 +213,16 @@ const Projects = () => {
 
   // Filter and sort projects
   const filteredProjects = useMemo(() => {
-    return projects.filter(project => {
-      const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          project.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const filtered = projects.filter(project => {
+      const matchesSearch = project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          project.description?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
       const matchesPriority = priorityFilter === 'all' || project.priority === priorityFilter;
       
       return matchesSearch && matchesStatus && matchesPriority;
     });
+    console.log('Filtered projects:', filtered);
+    return filtered;
   }, [projects, searchQuery, statusFilter, priorityFilter]);
 
   // Pagination handlers
@@ -324,7 +335,12 @@ const Projects = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>{t('name')}</TableCell>
+              <TableCell sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Avatar sx={{ width: 24, height: 24, bgcolor: 'primary.main' }}>
+                  <PersonIcon sx={{ fontSize: 16 }} />
+                </Avatar>
+                {t('name')}
+              </TableCell>
               <TableCell sx={{ fontWeight: 600 }}>{t('description')}</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>{t('status')}</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>{t('priority')}</TableCell>
@@ -364,28 +380,28 @@ const Projects = () => {
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>{project.startDate}</TableCell>
-                  <TableCell>{project.endDate}</TableCell>
+                  <TableCell>{formatDate(project.startDate || project.start_date)}</TableCell>
+                  <TableCell>{formatDate(project.endDate || project.end_date)}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Avatar
-                        src={`${project.user?.avatar}`}
-                        alt={project.user?.name}
+                        src={project.creator?.avatar ? getAvatarUrl(project.creator.avatar) : undefined}
+                        alt={project.creator?.name}
                         sx={{ 
                           width: 32, 
                           height: 32,
-                          bgcolor: project.user?.avatar ? 'transparent' : 'primary.main'
+                          bgcolor: project.creator?.avatar ? 'transparent' : 'primary.main'
                         }}
                       >
-                        {!project.user?.avatar && project.user?.name?.charAt(0).toUpperCase()}
+                        {!project.creator?.avatar && project.creator?.name?.charAt(0).toUpperCase()}
                       </Avatar>
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {project.user?.name || t('userNotFound')}
+                          {project.creator?.name || t('userNotFound')}
                         </Typography>
-                        {project.user?.username && (
+                        {project.creator?.username && (
                           <Typography variant="caption" color="text.secondary">
-                            @{project.user.username}
+                            @{project.creator.username}
                           </Typography>
                         )}
                       </Box>

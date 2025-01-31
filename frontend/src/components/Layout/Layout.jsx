@@ -150,7 +150,7 @@ const Layout = () => {
     { text: t('companies'), icon: <CompaniesIcon />, path: '/companies', badge: '17' },
     { text: t('extensions'), icon: <ExtensionsIcon />, path: '/extensions' },
     // Admin only items
-    ...(user?.role === 'admin' ? [
+    ...(user?.role?.toLowerCase() === 'admin' ? [
       { text: t('reports'), icon: <ReportsIcon />, path: '/reports' },
       { text: t('users'), icon: <PeopleIcon />, path: '/users', badge: userCount.toString() },
     ] : []),

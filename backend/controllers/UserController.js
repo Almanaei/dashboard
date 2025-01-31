@@ -1,10 +1,32 @@
-import User from '../models/User.js';
+import { User } from '../models/index.js';
 import bcrypt from 'bcrypt';
+import { sequelize } from '../config/database.js';
 
 export const getUsers = async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: { exclude: ['password'] }
+      raw: true,
+      nest: true,
+      attributes: {
+        include: [
+          'id',
+          'name',
+          'username',
+          'email',
+          'initials',
+          'role',
+          'status',
+          ['last_login', 'lastLogin'],
+          'avatar',
+          ['created_at', 'createdAt'],
+          ['updated_at', 'updatedAt']
+        ],
+        exclude: ['password']
+      },
+      order: [
+        [sequelize.col('last_login'), 'DESC'],
+        [sequelize.col('created_at'), 'DESC']
+      ]
     });
     res.json(users);
   } catch (error) {
@@ -15,7 +37,7 @@ export const getUsers = async (req, res) => {
 
 export const createUser = async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, name } = req.body;
 
     // Check if user exists
     const existingUser = await User.findOne({
@@ -33,7 +55,9 @@ export const createUser = async (req, res) => {
       username,
       email,
       password,
-      role: role || 'user'
+      role: role || 'user',
+      name,
+      lastLogin: new Date()
     });
 
     // Return user without password
@@ -48,7 +72,7 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, email, password, role, status } = req.body;
+    const { username, email, password, role, status, name } = req.body;
 
     const user = await User.findByPk(id);
     if (!user) {
@@ -61,6 +85,11 @@ export const updateUser = async (req, res) => {
     if (password) user.password = password; // Will be hashed by model hooks
     if (role) user.role = role;
     if (status) user.status = status;
+    if (name) {
+      user.name = name;
+      // Update initials when name changes
+      user.initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
+    }
 
     await user.save();
 

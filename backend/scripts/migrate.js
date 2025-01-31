@@ -1,34 +1,45 @@
-import { readdirSync } from 'fs';
-import { join } from 'path';
+import { Sequelize } from 'sequelize';
+import { Umzug, SequelizeStorage } from 'umzug';
+import dotenv from 'dotenv';
+import path from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
-async function runMigrations() {
-  const migrationsDir = join(__dirname, '..', 'migrations');
-  
+dotenv.config();
+
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  logging: console.log
+});
+
+const umzug = new Umzug({
+  migrations: {
+    glob: 'migrations/*.js',
+    resolve: ({ name, path, context }) => {
+      const migration = import(path);
+      return {
+        name,
+        up: async () => migration.up(context, Sequelize),
+        down: async () => migration.down(context, Sequelize),
+      };
+    },
+  },
+  context: sequelize.getQueryInterface(),
+  storage: new SequelizeStorage({ sequelize }),
+  logger: console,
+});
+
+// Run all pending migrations
+const runMigrations = async () => {
   try {
-    // Get all migration files
-    const migrationFiles = readdirSync(migrationsDir)
-      .filter(file => file.endsWith('.js'))
-      .sort();
-
-    // Run migrations in sequence
-    for (const file of migrationFiles) {
-      console.log(`Running migration: ${file}`);
-      const migration = await import(join(migrationsDir, file));
-      await migration.up();
-      console.log(`Completed migration: ${file}`);
-    }
-
+    await umzug.up();
     console.log('All migrations completed successfully');
     process.exit(0);
   } catch (error) {
     console.error('Migration failed:', error);
     process.exit(1);
   }
-}
+};
 
 runMigrations();

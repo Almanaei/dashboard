@@ -1,10 +1,10 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { User } from '../models/index.js';
 import bcrypt from 'bcrypt';
 
 export const register = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, name } = req.body;
 
     // Check if user exists
     const existingUser = await User.findOne({
@@ -15,16 +15,29 @@ export const register = async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
+    // Create initials from username or name
+    const initials = name ? name.split(' ').map(n => n[0]).join('').toUpperCase() 
+                        : username.substring(0, 2).toUpperCase();
+
     // Create user
     const user = await User.create({
       username,
       email,
-      password
+      password,
+      name,
+      initials
     });
 
     // Generate token
     const token = jwt.sign(
-      { userId: user.id },
+      { 
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        username: user.username,
+        name: user.name,
+        initials: user.initials
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -34,7 +47,10 @@ export const register = async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        name: user.name,
+        initials: user.initials,
+        role: user.role
       }
     });
   } catch (error) {
@@ -60,10 +76,8 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check password using bcrypt directly
+    // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
-    console.log('Password validation:', { isValid: isValidPassword });
-    
     if (!isValidPassword) {
       console.log('Invalid password for user:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -72,11 +86,15 @@ export const login = async (req, res) => {
     // Update last login
     await user.update({ lastLogin: new Date() });
 
-    // Generate token
+    // Generate token with additional user info
     const token = jwt.sign(
       { 
-        userId: user.id,
-        role: user.role  // Include role in token
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        username: user.username,
+        name: user.name,
+        initials: user.initials
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -90,6 +108,8 @@ export const login = async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
+        name: user.name,
+        initials: user.initials,
         role: user.role
       }
     });

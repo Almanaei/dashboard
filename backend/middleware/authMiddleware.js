@@ -1,25 +1,38 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { User } from '../models/index.js';
 
 export const verifyToken = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token) {
+    // Get token from header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('No valid auth header:', authHeader);
       return res.status(401).json({ error: 'No token provided' });
     }
 
+    const token = authHeader.split(' ')[1];
+    console.log('Verifying token:', token.substring(0, 10) + '...');
+
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findByPk(decoded.userId);
+    console.log('Decoded token:', decoded);
 
-    if (!user) {
-      return res.status(401).json({ error: 'User not found' });
-    }
+    // Add user info to request directly from token
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role
+    };
 
-    req.user = user;
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    console.error('Token verification error:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    } else if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+    return res.status(401).json({ error: 'Authentication failed' });
   }
 };
 
@@ -29,12 +42,14 @@ export const requireAdmin = async (req, res, next) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    if (req.user.role !== 'admin') {
+    // Case insensitive role check
+    if (req.user.role.toLowerCase() !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
     next();
   } catch (error) {
+    console.error('Admin check error:', error);
     return res.status(500).json({ error: error.message });
   }
 };

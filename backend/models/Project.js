@@ -1,60 +1,73 @@
 import { DataTypes } from 'sequelize';
 import { sequelize } from '../config/database.js';
-import User from './User.js';
 
 const Project = sequelize.define('Project', {
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
+    primaryKey: true
   },
   name: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: false
   },
   description: {
     type: DataTypes.TEXT,
-    allowNull: true,
+    allowNull: true
   },
   status: {
     type: DataTypes.ENUM('planning', 'in_progress', 'completed', 'on_hold'),
-    defaultValue: 'planning',
+    defaultValue: 'planning'
   },
-  startDate: {
+  start_date: {
     type: DataTypes.DATE,
     allowNull: true,
+    field: 'start_date'
   },
-  endDate: {
+  end_date: {
     type: DataTypes.DATE,
     allowNull: true,
+    field: 'end_date'
   },
   priority: {
     type: DataTypes.ENUM('low', 'medium', 'high'),
-    defaultValue: 'medium',
+    defaultValue: 'medium'
   },
   budget: {
     type: DataTypes.DECIMAL(10, 2),
-    allowNull: true,
+    allowNull: true
   },
-  createdBy: {
+  progress: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    validate: {
+      min: 0,
+      max: 100
+    }
+  },
+  created_by: {
     type: DataTypes.UUID,
     allowNull: false,
+    field: 'created_by',
     references: {
-      model: User,
-      key: 'id',
-    },
-  },
+      model: 'Users',
+      key: 'id'
+    }
+  }
+}, {
+  timestamps: true,
+  tableName: 'projects',
+  underscored: true
 });
 
-// Associations
-Project.belongsTo(User, { 
-  foreignKey: 'createdBy', 
-  as: 'creator' 
-});
-
-User.hasMany(Project, { 
-  foreignKey: 'createdBy', 
-  as: 'projects' 
-});
+// Define associations
+Project.associate = (models) => {
+  Project.belongsTo(models.User, { 
+    foreignKey: 'created_by',
+    as: 'creator',
+    onDelete: 'CASCADE'
+  });
+};
 
 export default Project;

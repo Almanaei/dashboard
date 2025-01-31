@@ -1,12 +1,31 @@
-import { DataTypes } from 'sequelize';
+import { Model, DataTypes } from 'sequelize';
 import bcrypt from 'bcrypt';
 import { sequelize } from '../config/database.js';
 
-const User = sequelize.define('User', {
+class User extends Model {
+  static associate(models) {
+    User.hasMany(models.Project, {
+      foreignKey: 'created_by',
+      as: 'projects',
+      onDelete: 'CASCADE'
+    });
+    User.hasMany(models.Report, {
+      foreignKey: 'user_id',
+      as: 'reports',
+      onDelete: 'CASCADE'
+    });
+  }
+}
+
+User.init({
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false
   },
   username: {
     type: DataTypes.STRING,
@@ -28,14 +47,44 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  initials: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null
+  },
   role: {
-    type: DataTypes.ENUM('user', 'admin'),
+    type: DataTypes.ENUM('admin', 'user'),
     defaultValue: 'user'
   },
+  status: {
+    type: DataTypes.ENUM('Active', 'Inactive'),
+    defaultValue: 'Active'
+  },
   lastLogin: {
-    type: DataTypes.DATE
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'last_login'
+  },
+  avatar: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
+  sequelize,
+  modelName: 'User',
+  tableName: 'users',
+  underscored: true,
+  timestamps: true,
+  defaultScope: {
+    attributes: {
+      exclude: ['password']
+    }
+  },
+  scopes: {
+    withPassword: {
+      attributes: { include: ['password'] }
+    }
+  },
   hooks: {
     beforeUpdate: async (user) => {
       if (user.changed('password')) {
@@ -43,19 +92,21 @@ const User = sequelize.define('User', {
       }
     },
     beforeCreate: async (user) => {
-      user.password = await bcrypt.hash(user.password, 10);
+      if (user.password) {
+        user.password = await bcrypt.hash(user.password, 10);
+      }
+      if (!user.initials && user.name) {
+        user.initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
+      } else if (!user.initials && user.username) {
+        user.initials = user.username.substring(0, 2).toUpperCase();
+      }
     }
   }
 });
 
 // Instance method to check password
 User.prototype.validatePassword = async function(password) {
-  return await bcrypt.compare(password, this.password);
+  return bcrypt.compare(password, this.password);
 };
 
-// Static method to hash password
-User.hashPassword = function(password) {
-  return bcrypt.hashSync(password, 10);
-};
-
-export default User;
+export default User; 

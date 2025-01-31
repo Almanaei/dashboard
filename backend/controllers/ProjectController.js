@@ -1,81 +1,34 @@
-import Project from '../models/Project.js';
-import User from '../models/User.js';
+import { Project, User } from '../models/index.js';
 import { Op } from 'sequelize';
 
 // Get all projects with filtering, sorting, and pagination
 export const getAllProjects = async (req, res) => {
   try {
-    const {
-      search,
-      status,
-      priority,
-      startDate,
-      endDate,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
-      page = 1,
-      limit = 10
-    } = req.query;
+    console.log('Getting all projects for user:', req.user);
 
     // Build where clause
-    const where = {
-      createdBy: req.user.userId
-    };
+    const where = {};
 
-    // Search
-    if (search) {
-      where[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } }
-      ];
+    // Add user-specific filtering for non-admin users
+    if (req.user.role !== 'admin') {
+      where.created_by = req.user.id;
     }
 
-    // Status filter
-    if (status) {
-      where.status = status;
-    }
-
-    // Priority filter
-    if (priority) {
-      where.priority = priority;
-    }
-
-    // Date range filter
-    if (startDate) {
-      where.startDate = { [Op.gte]: new Date(startDate) };
-    }
-    if (endDate) {
-      where.endDate = { [Op.lte]: new Date(endDate) };
-    }
-
-    // Calculate offset
-    const offset = (page - 1) * limit;
-
-    // Get total count for pagination
-    const total = await Project.count({ where });
-
-    // Get projects with filters, sorting, and pagination
+    // Get projects with filters and user data
     const projects = await Project.findAll({
       where,
       include: [{
         model: User,
         as: 'creator',
-        attributes: ['id', 'username', 'email']
+        attributes: ['id', 'name', 'email', 'username', 'avatar']
       }],
-      order: [[sortBy, sortOrder.toUpperCase()]],
-      limit: parseInt(limit),
-      offset: offset
+      order: [['createdAt', 'DESC']]
     });
 
-    res.json({
-      projects,
-      pagination: {
-        total,
-        page: parseInt(page),
-        totalPages: Math.ceil(total / limit)
-      }
-    });
+    console.log('Found projects:', projects.length);
+    res.json(projects);
   } catch (error) {
+    console.error('Error getting projects:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -83,15 +36,19 @@ export const getAllProjects = async (req, res) => {
 // Get project by ID
 export const getProjectById = async (req, res) => {
   try {
+    const whereClause = { id: req.params.id };
+    
+    // Add user-specific filtering for non-admin users
+    if (req.user.role !== 'admin') {
+      whereClause.created_by = req.user.id;
+    }
+
     const project = await Project.findOne({
-      where: { 
-        id: req.params.id,
-        createdBy: req.user.userId
-      },
+      where: whereClause,
       include: [{
         model: User,
         as: 'creator',
-        attributes: ['id', 'username', 'email']
+        attributes: ['id', 'name', 'email', 'username', 'avatar']
       }]
     });
 
@@ -101,6 +58,7 @@ export const getProjectById = async (req, res) => {
 
     res.json(project);
   } catch (error) {
+    console.error('Error getting project:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -108,22 +66,58 @@ export const getProjectById = async (req, res) => {
 // Create new project
 export const createProject = async (req, res) => {
   try {
-    const project = await Project.create({
+    console.log('Creating project with data:', req.body);
+    console.log('User:', req.user);
+
+    if (!req.user || !req.user.id) {
+      console.error('No user ID found in request');
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    // Convert dates to ISO format if they exist
+    const projectData = {
       ...req.body,
-      createdBy: req.user.userId
+      created_by: req.user.id,
+      start_date: req.body.start_date ? 
+        new Date(req.body.start_date).toISOString() : undefined,
+      end_date: req.body.end_date ? 
+        new Date(req.body.end_date).toISOString() : undefined,
+      budget: req.body.budget ? parseFloat(req.body.budget) : undefined
+    };
+
+    // Remove undefined values
+    Object.keys(projectData).forEach(key => {
+      if (projectData[key] === undefined) {
+        delete projectData[key];
+      }
     });
+
+    console.log('Processed project data:', projectData);
+
+    const project = await Project.create(projectData);
+    console.log('Project created:', project.toJSON());
 
     const projectWithCreator = await Project.findOne({
       where: { id: project.id },
       include: [{
         model: User,
         as: 'creator',
-        attributes: ['id', 'username', 'email']
+        attributes: ['id', 'name', 'email', 'username', 'avatar']
       }]
     });
 
+    if (!projectWithCreator) {
+      console.error('Created project not found with creator');
+      return res.status(500).json({ error: 'Failed to retrieve created project' });
+    }
+
+    console.log('Created project with creator:', projectWithCreator.get({ plain: true }));
     res.status(201).json(projectWithCreator);
   } catch (error) {
+    console.error('Error creating project:', error);
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
     res.status(400).json({ error: error.message });
   }
 };
@@ -131,30 +125,54 @@ export const createProject = async (req, res) => {
 // Update project
 export const updateProject = async (req, res) => {
   try {
-    const project = await Project.findOne({
-      where: { 
-        id: req.params.id,
-        createdBy: req.user.userId
-      }
-    });
+    const whereClause = { 
+      id: req.params.id,
+      created_by: req.user.id
+    };
+
+    // Allow admin to update any project
+    if (req.user.role === 'admin') {
+      delete whereClause.created_by;
+    }
+
+    const project = await Project.findOne({ where: whereClause });
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    await project.update(req.body);
+    // Process update data
+    const updateData = {
+      ...req.body,
+      startDate: req.body.startDate ? new Date(req.body.startDate).toISOString() : undefined,
+      endDate: req.body.endDate ? new Date(req.body.endDate).toISOString() : undefined,
+      budget: req.body.budget ? parseFloat(req.body.budget) : undefined
+    };
+
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+
+    await project.update(updateData);
 
     const updatedProject = await Project.findOne({
       where: { id: project.id },
       include: [{
         model: User,
         as: 'creator',
-        attributes: ['id', 'username', 'email']
+        attributes: ['id', 'name', 'email', 'username', 'avatar']
       }]
     });
 
     res.json(updatedProject);
   } catch (error) {
+    console.error('Error updating project:', error);
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
     res.status(400).json({ error: error.message });
   }
 };
@@ -162,12 +180,17 @@ export const updateProject = async (req, res) => {
 // Delete project
 export const deleteProject = async (req, res) => {
   try {
-    const project = await Project.findOne({
-      where: { 
-        id: req.params.id,
-        createdBy: req.user.userId
-      }
-    });
+    const whereClause = { 
+      id: req.params.id,
+      created_by: req.user.id
+    };
+
+    // Allow admin to delete any project
+    if (req.user.role === 'admin') {
+      delete whereClause.created_by;
+    }
+
+    const project = await Project.findOne({ where: whereClause });
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
@@ -176,6 +199,7 @@ export const deleteProject = async (req, res) => {
     await project.destroy();
     res.json({ message: 'Project deleted successfully' });
   } catch (error) {
+    console.error('Error deleting project:', error);
     res.status(500).json({ error: error.message });
   }
 };

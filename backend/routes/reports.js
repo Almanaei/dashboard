@@ -1,129 +1,421 @@
 import express from 'express';
-import { Op } from 'sequelize';
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
 import PDFDocument from 'pdfkit';
-import { Report, ReportAttachment } from '../models/index.js';
+import jwt from 'jsonwebtoken';
+import db, { Report, ReportAttachment, User, sequelize } from '../models/index.js';
 import { verifyToken, requireAdmin } from '../middleware/authMiddleware.js';
+import { storage, fileFilter, limits } from '../config/multer.js';
+import { validateFiles } from '../middleware/validateFiles.js';
 
 const router = express.Router();
-
-// Protect all report routes with authentication and admin access
-router.use(verifyToken);
-router.use(requireAdmin);
-
-// Set up file paths for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    // Create a unique filename while preserving the original extension
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
 const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+  storage,
+  fileFilter,
+  limits
+});
+
+// Protect all routes with authentication except debug routes
+router.use((req, res, next) => {
+  if (req.path.startsWith('/debug')) {
+    next();
+  } else {
+    verifyToken(req, res, next);
   }
 });
 
-// Get all reports with optional search
+// Debug route to check database status (no auth required)
+router.get('/debug/status', async (req, res) => {
+  try {
+    // Get migrations status
+    const migrations = await Report.sequelize.query(`
+      SELECT *
+      FROM "SequelizeMeta"
+      ORDER BY name
+    `, { type: Report.sequelize.QueryTypes.SELECT });
+
+    // Get all tables and their columns
+    const tables = await Report.sequelize.query(`
+      SELECT table_name, column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public'
+      ORDER BY table_name, ordinal_position
+    `, { type: Report.sequelize.QueryTypes.SELECT });
+
+    // Get all reports directly from the database
+    const reports = await Report.sequelize.query(`
+      SELECT r.*, u.email as user_email
+      FROM reports r
+      LEFT JOIN users u ON r.user_id = u.id
+    `, { type: Report.sequelize.QueryTypes.SELECT });
+
+    res.json({
+      migrations,
+      tables,
+      reports
+    });
+  } catch (error) {
+    console.error('Error checking database status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug route to reset migrations (no auth required)
+router.post('/debug/reset-migrations', async (req, res) => {
+  try {
+    // Drop tables and constraints
+    await Report.sequelize.query(`
+      DROP TABLE IF EXISTS report_attachments CASCADE;
+      DROP TABLE IF EXISTS reports CASCADE;
+    `);
+
+    // Delete old migrations
+    await Report.sequelize.query(`
+      DELETE FROM "SequelizeMeta"
+      WHERE name LIKE '%reports%'
+    `);
+
+    res.json({ message: 'Database reset successful' });
+  } catch (error) {
+    console.error('Error resetting database:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug route to check token (no auth required)
+router.post('/debug/check-token', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('Decoded token:', decoded);
+
+      // Check if user exists
+      const user = await User.findByPk(decoded.id);
+      if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      res.json({ 
+        valid: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role
+        },
+        decoded 
+      });
+    } catch (err) {
+      console.error('Token verification error:', err);
+      res.status(401).json({ error: 'Invalid token', details: err.message });
+    }
+  } catch (error) {
+    console.error('Error checking token:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all reports
 router.get('/', async (req, res) => {
   try {
     const { search } = req.query;
     let whereClause = {};
     
+    console.log('GET /reports - User:', {
+      id: req.user.id,
+      role: req.user.role
+    });
+    
+    // Add user-specific filtering for non-admin users
+    if (req.user.role.toLowerCase() !== 'admin') {
+      whereClause.userId = req.user.id;
+    }
+    
     if (search) {
       whereClause = {
-        [Op.or]: [
-          { title: { [Op.iLike]: `%${search}%` } },
-          { content: { [Op.iLike]: `%${search}%` } },
-          { address: { [Op.iLike]: `%${search}%` } }
+        ...whereClause,
+        [db.Op.or]: [
+          { title: { [db.Op.iLike]: `%${search}%` } },
+          { content: { [db.Op.iLike]: `%${search}%` } },
+          { address: { [db.Op.iLike]: `%${search}%` } }
         ]
       };
     }
 
+    console.log('GET /reports - Where clause:', JSON.stringify(whereClause, null, 2));
+
     const reports = await Report.findAll({
       where: whereClause,
-      include: [{
-        model: ReportAttachment,
-        as: 'attachments'
-      }],
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'role', 'name', 'avatar']
+        },
+        {
+          model: ReportAttachment,
+          as: 'attachments'
+        }
+      ],
       order: [['created_at', 'DESC']]
     });
-    res.json(reports);
+
+    console.log(`Found ${reports.length} reports`);
+    
+    // Transform the reports to ensure consistent format
+    const transformedReports = reports.map(report => {
+      const plainReport = report.get({ plain: true });
+      return {
+        ...plainReport,
+        attachments: plainReport.attachments?.map(attachment => ({
+          ...attachment,
+          url: attachment.url.startsWith('http') ? attachment.url : `/uploads/${attachment.filename}`
+        })) || []
+      };
+    });
+
+    res.json(transformedReports);
   } catch (error) {
-    console.error('Error fetching reports:', error);
-    res.status(500).json({ message: 'Failed to fetch reports' });
+    console.error('Error getting reports:', error);
+    res.status(500).json({ 
+      message: 'Failed to get reports', 
+      error: error.message 
+    });
   }
 });
 
 // Create a new report
 router.post('/', upload.array('attachments'), async (req, res) => {
+  let transaction;
+  
   try {
-    const { title, content, date, time, address } = req.body;
+    transaction = await sequelize.transaction();
     
-    // Create the report
-    const report = await Report.create({
+    console.log('=== Creating Report ===');
+    console.log('Request user:', req.user);
+    console.log('Request headers:', req.headers);
+    
+    if (!req.user) {
+      throw new Error('Authentication required');
+    }
+
+    if (!req.user.id) {
+      throw new Error('User ID is missing');
+    }
+
+    const { title, content, date, time, address } = req.body;
+
+    if (!title || !content || !date || !time || !address) {
+      throw new Error('Missing required fields');
+    }
+
+    // Create report
+    const reportData = {
       title,
       content,
       date,
       time,
-      address
-    });
+      address,
+      userId: req.user.id
+    };
+    
+    console.log('Creating report with data:', reportData);
 
-    // Process uploaded files
+    const report = await Report.create(reportData, { transaction });
+
+    // Handle attachments
     if (req.files && req.files.length > 0) {
-      const attachments = req.files.map(file => ({
-        report_id: report.id,
-        name: file.originalname,
-        size: file.size,
-        type: file.mimetype,
-        url: `/uploads/${file.filename}`
-      }));
+      console.log('=== Processing attachments ===');
+      console.log('Number of new files:', req.files.length);
+      console.log('Raw file objects:', JSON.stringify(req.files, null, 2));
 
-      await ReportAttachment.bulkCreate(attachments);
+      const attachments = req.files.map((file, index) => {
+        // Log the complete file object
+        console.log(`\nProcessing file ${index}:`, file);
+        console.log('File properties:', {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          encoding: file.encoding,
+          mimetype: file.mimetype,
+          destination: file.destination,
+          filename: file.filename,
+          path: file.path,
+          size: file.size
+        });
+
+        const baseType = file.mimetype.split('/')[0];
+        let type = 'document';
+        switch (baseType) {
+          case 'image':
+            type = 'image';
+            break;
+          case 'application':
+            type = 'document';
+            break;
+        }
+
+        // Get file stats for size
+        let fileSize = file.size;
+        if (!fileSize && file.path) {
+          try {
+            const stats = fs.statSync(file.path);
+            fileSize = stats.size;
+          } catch (err) {
+            console.warn(`Could not get file size for ${file.originalname}:`, err);
+            fileSize = 0;
+          }
+        }
+
+        // Ensure we have a filename
+        if (!file.filename) {
+          console.error('Missing filename for file:', file);
+          throw new Error(`Missing filename for file at index ${index}`);
+        }
+
+        const attachmentData = {
+          report_id: report.id,
+          name: file.originalname,
+          filename: file.filename,
+          original_name: file.originalname,
+          mime_type: file.mimetype,
+          size: fileSize,
+          type: type,
+          url: `/uploads/${file.filename}`
+        };
+
+        console.log('Prepared attachment data:', attachmentData);
+        return attachmentData;
+      });
+
+      console.log('Creating attachments:', JSON.stringify(attachments, null, 2));
+      
+      try {
+        // Log the exact data being sent to bulkCreate
+        console.log('Sending to bulkCreate:', {
+          data: attachments,
+          fields: [
+            'report_id',
+            'name',
+            'filename',
+            'original_name',
+            'mime_type',
+            'size',
+            'type',
+            'url'
+          ]
+        });
+
+        const createdAttachments = await ReportAttachment.bulkCreate(attachments, { 
+          transaction,
+          validate: true,
+          returning: true,
+          fields: [
+            'report_id',
+            'name',
+            'filename',
+            'original_name',
+            'mime_type',
+            'size',
+            'type',
+            'url'
+          ]
+        });
+        console.log('Successfully created attachments:', JSON.stringify(createdAttachments, null, 2));
+      } catch (error) {
+        console.error('Error creating attachments:', error);
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          errors: error.errors
+        });
+        throw error;
+      }
+    } else {
+      console.log('No files to process in request');
     }
 
-    // Fetch the complete report with attachments
-    const completeReport = await Report.findByPk(report.id, {
-      include: [{
-        model: ReportAttachment,
-        as: 'attachments'
-      }]
+    await transaction.commit();
+
+    // Fetch created report with all associations
+    const createdReport = await Report.findByPk(report.id, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'role', 'name', 'avatar']
+        },
+        {
+          model: ReportAttachment,
+          as: 'attachments'
+        }
+      ]
     });
 
-    res.status(201).json(completeReport);
+    res.status(201).json(createdReport);
   } catch (error) {
     console.error('Error creating report:', error);
-    res.status(400).json({ message: 'Failed to create report' });
+    if (transaction) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error('Error rolling back transaction:', rollbackError);
+      }
+    }
+
+    // Send appropriate error response
+    if (error.message === 'Authentication required') {
+      res.status(401).json({ message: error.message });
+    } else if (error.message === 'User ID is missing') {
+      res.status(400).json({ message: error.message });
+    } else if (error.message === 'Missing required fields') {
+      res.status(400).json({ message: error.message });
+    } else {
+      res.status(500).json({ 
+        message: 'Failed to create report',
+        error: error.message 
+      });
+    }
   }
 });
 
 // Update a report
 router.put('/:id', upload.array('attachments'), async (req, res) => {
+  let transaction;
+  
   try {
-    const { title, content, date, time, address } = req.body;
-    const report = await Report.findByPk(req.params.id);
+    transaction = await sequelize.transaction();
+    
+    console.log('=== Starting report update ===');
+    console.log('Request body:', req.body);
+    console.log('Files in request:', req.files ? req.files.length : 0);
+
+    const { title, content, date, time, address, attachmentsToKeep } = req.body;
+    console.log('Attachments to keep:', attachmentsToKeep);
+
+    // Find the report with its attachments
+    const report = await Report.findByPk(req.params.id, {
+      include: [{
+        model: ReportAttachment,
+        as: 'attachments'
+      }],
+      transaction
+    });
     
     if (!report) {
-      return res.status(404).json({ message: 'Report not found' });
+      throw new Error('Report not found');
+    }
+
+    // Check if user has permission to update the report
+    if (req.user.role.toLowerCase() !== 'admin' && report.userId !== req.user.id) {
+      throw new Error('Forbidden');
     }
 
     // Update report details
@@ -132,34 +424,187 @@ router.put('/:id', upload.array('attachments'), async (req, res) => {
       content,
       date,
       time,
-      address
-    });
+      address,
+      updatedAt: new Date()
+    }, { transaction });
+
+    // Handle existing attachments
+    if (report.attachments) {
+      let attachmentsToKeepArray = [];
+      try {
+        attachmentsToKeepArray = attachmentsToKeep ? JSON.parse(attachmentsToKeep) : [];
+      } catch (err) {
+        throw new Error('Invalid attachmentsToKeep format');
+      }
+
+      // Delete attachments that are not in the keepList
+      const attachmentsToDelete = report.attachments.filter(
+        attachment => !attachmentsToKeepArray.includes(attachment.id.toString())
+      );
+
+      if (attachmentsToDelete.length > 0) {
+        await Promise.all(attachmentsToDelete.map(async (attachment) => {
+          try {
+            if (attachment.filename) {
+              const filePath = path.join(process.cwd(), 'uploads', attachment.filename);
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+              }
+            }
+            await attachment.destroy({ transaction });
+          } catch (err) {
+            throw new Error(`Failed to delete attachment: ${err.message}`);
+          }
+        }));
+      }
+    }
 
     // Process new uploaded files
     if (req.files && req.files.length > 0) {
-      const attachments = req.files.map(file => ({
-        report_id: report.id,
-        name: file.originalname,
-        size: file.size,
-        type: file.mimetype,
-        url: `/uploads/${file.filename}`
-      }));
+      console.log('=== Processing new attachments ===');
+      console.log('Number of new files:', req.files.length);
+      console.log('Files received:', req.files.map(f => ({
+        fieldname: f.fieldname,
+        originalname: f.originalname,
+        encoding: f.encoding,
+        mimetype: f.mimetype,
+        filename: f.filename,
+        path: f.path,
+        size: f.size
+      })));
 
-      await ReportAttachment.bulkCreate(attachments);
+      // Validate all files have required data
+      const invalidFiles = req.files.filter(file => {
+        const missingFields = [];
+        if (!file.filename) missingFields.push('filename');
+        if (!file.originalname) missingFields.push('originalname');
+        if (!file.mimetype) missingFields.push('mimetype');
+        
+        if (missingFields.length > 0) {
+          console.error(`File ${file.originalname || 'unknown'} missing fields:`, missingFields);
+          return true;
+        }
+        return false;
+      });
+
+      if (invalidFiles.length > 0) {
+        throw new Error(`Invalid files detected: ${invalidFiles.map(f => f.originalname || 'unknown').join(', ')}`);
+      }
+
+      const newAttachments = req.files.map((file, index) => {
+        console.log('Processing file:', {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          encoding: file.encoding,
+          mimetype: file.mimetype,
+          destination: file.destination,
+          filename: file.filename,
+          path: file.path,
+          size: file.size
+        });
+
+        const baseType = file.mimetype.split('/')[0];
+        let type = 'document';
+        switch (baseType) {
+          case 'image':
+            type = 'image';
+            break;
+          case 'application':
+            type = 'document';
+            break;
+        }
+
+        // Get file stats for size
+        let fileSize = file.size;
+        if (!fileSize && file.path) {
+          try {
+            const stats = fs.statSync(file.path);
+            fileSize = stats.size;
+          } catch (err) {
+            console.warn(`Could not get file size for ${file.originalname}:`, err);
+            fileSize = 0;
+          }
+        }
+
+        // Ensure we have a filename
+        if (!file.filename) {
+          throw new Error(`Missing filename for file at index ${index}`);
+        }
+
+        const attachmentData = {
+          report_id: report.id,
+          name: file.originalname,
+          filename: file.filename,
+          original_name: file.originalname,
+          mime_type: file.mimetype,
+          size: fileSize,
+          type: type,
+          url: `/uploads/${file.filename}`
+        };
+
+        console.log('Prepared attachment data:', attachmentData);
+        return attachmentData;
+      });
+
+      console.log('Creating new attachments:', JSON.stringify(newAttachments, null, 2));
+
+      const createdAttachments = await ReportAttachment.bulkCreate(newAttachments, {
+        transaction,
+        validate: true,
+        returning: true,
+        fields: [
+          'report_id',
+          'name',
+          'filename',
+          'original_name',
+          'mime_type',
+          'size',
+          'type',
+          'url'
+        ]
+      });
+      console.log('Successfully created new attachments:', createdAttachments);
     }
 
-    // Fetch updated report with attachments
+    await transaction.commit();
+
+    // Fetch updated report with all associations
     const updatedReport = await Report.findByPk(report.id, {
-      include: [{
-        model: ReportAttachment,
-        as: 'attachments'
-      }]
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'role', 'name', 'avatar']
+        },
+        {
+          model: ReportAttachment,
+          as: 'attachments'
+        }
+      ]
     });
 
     res.json(updatedReport);
   } catch (error) {
-    console.error('Error updating report:', error);
-    res.status(400).json({ message: 'Failed to update report' });
+    console.error('Error in report update:', error);
+    if (transaction) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error('Error rolling back transaction:', rollbackError);
+      }
+    }
+
+    // Send appropriate error response
+    if (error.message === 'Report not found') {
+      res.status(404).json({ message: error.message });
+    } else if (error.message === 'Forbidden') {
+      res.status(403).json({ message: error.message });
+    } else {
+      res.status(500).json({ 
+        message: 'Failed to update report',
+        error: error.message 
+      });
+    }
   }
 });
 
@@ -169,6 +614,11 @@ router.delete('/:id', async (req, res) => {
     const report = await Report.findByPk(req.params.id);
     if (!report) {
       return res.status(404).json({ message: 'Report not found' });
+    }
+
+    // Check if user has permission to delete the report
+    if (req.user.role.toLowerCase() !== 'admin' && report.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     await report.destroy();
@@ -192,6 +642,11 @@ router.get('/:id/pdf', async (req, res) => {
     
     if (!report) {
       return res.status(404).json({ message: 'Report not found' });
+    }
+
+    // Check if user has permission to view the report
+    if (req.user.role.toLowerCase() !== 'admin' && report.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     // Create a new PDF document

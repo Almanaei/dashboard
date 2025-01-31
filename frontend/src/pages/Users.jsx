@@ -37,11 +37,14 @@ import { getUsers, createUser, updateUser, updateUserAvatar, deleteUser, updateU
 import { useSearch } from '@/context/SearchContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useProjects } from '../context/ProjectContext';
+import { formatLastActive } from '../utils/dateUtils';
+import axios from 'axios';
 
 const Users = () => {
   const { t, isRTL } = useLanguage();
   const { globalSearch } = useSearch();
   const { updateUserData } = useProjects();
+  const API_URL = 'http://localhost:5005';
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -51,6 +54,7 @@ const Users = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
     username: '',
+    name: '',
     email: '',
     password: '',
     role: 'user',
@@ -65,20 +69,30 @@ const Users = () => {
     severity: 'success'
   });
 
+  // Helper function to get avatar URL
+  const getAvatarUrl = (avatarPath) => {
+    if (!avatarPath) return undefined;
+    if (avatarPath.startsWith('data:')) return avatarPath;
+    return `${API_URL}/uploads/${avatarPath}`;
+  };
+
   const handleOpenDialog = (mode, user = null) => {
     setDialogMode(mode);
     setSelectedUser(user);
     if (user) {
+      console.log('Opening edit dialog with user:', user);
       setFormData({
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        status: user.status,
+        username: user.username || '',
+        name: user.name || '',
+        email: user.email || '',
+        role: user.role?.toLowerCase() || 'user',
+        status: user.status || 'Active',
         avatar: user.avatar || ''
       });
     } else {
       setFormData({
         username: '',
+        name: '',
         email: '',
         password: '',
         role: 'user',
@@ -94,6 +108,7 @@ const Users = () => {
     setSelectedUser(null);
     setFormData({
       username: '',
+      name: '',
       email: '',
       password: '',
       role: 'user',
@@ -106,7 +121,22 @@ const Users = () => {
     const file = event.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setError(t('avatarSizeError'));
+        setSnackbar({
+          open: true,
+          message: t('avatarSizeError'),
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Check file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        setSnackbar({
+          open: true,
+          message: t('invalidFileType'),
+          severity: 'error'
+        });
         return;
       }
 
@@ -118,47 +148,76 @@ const Users = () => {
         }));
       };
       reader.onerror = () => {
-        setError(t('avatarUploadError'));
+        setSnackbar({
+          open: true,
+          message: t('avatarUploadError'),
+          severity: 'error'
+        });
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleRemoveAvatar = () => {
+    setFormData(prev => ({
+      ...prev,
+      avatar: ''
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (dialogMode === 'create') {
-        await createUser({
-          ...formData,
-          role: formData.role.toLowerCase()
-        });
-        setSnackbar({
-          open: true,
-          message: t('userCreatedSuccessfully'),
-          severity: 'success'
-        });
-      } else {
-        const { password, ...updateData } = formData;
-        if (selectedUser) {
-          await updateUser(selectedUser.id, {
-            ...updateData,
-            role: updateData.role.toLowerCase()
-          });
-          setSnackbar({
-            open: true,
-            message: t('userUpdatedSuccessfully'),
-            severity: 'success'
-          });
-        }
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('username', formData.username);
+      formDataToSend.append('email', formData.email);
+      if (!selectedUser || formData.password) {
+        formDataToSend.append('password', formData.password);
       }
-      fetchUsers();
+      formDataToSend.append('role', formData.role.toLowerCase());
+      formDataToSend.append('status', formData.status);
+
+      // Handle avatar
+      if (formData.avatar) {
+        if (formData.avatar.startsWith('data:')) {
+          // Convert base64 to blob for new uploads
+          const response = await fetch(formData.avatar);
+          const blob = await response.blob();
+          formDataToSend.append('avatar', blob, 'avatar.jpg');
+        }
+      } else {
+        // If avatar was removed
+        formDataToSend.append('removeAvatar', 'true');
+      }
+
+      console.log('Submitting user data:', {
+        name: formData.name,
+        username: formData.username,
+        email: formData.email,
+        role: formData.role,
+        status: formData.status,
+        hasAvatar: !!formData.avatar,
+        isNewAvatar: formData.avatar?.startsWith('data:')
+      });
+
+      if (selectedUser) {
+        await updateUser(selectedUser.id, formDataToSend);
+        setSnackbar({ open: true, message: t('userUpdated'), severity: 'success' });
+      } else {
+        await createUser(formDataToSend);
+        setSnackbar({ open: true, message: t('userCreated'), severity: 'success' });
+      }
+
+      // Refresh the users list
+      await fetchUsers();
       handleCloseDialog();
     } catch (error) {
       console.error('Error submitting user:', error);
       setSnackbar({
         open: true,
-        message: t(dialogMode === 'create' ? 'failedToCreateUser' : 'failedToUpdateUser'),
+        message: error.response?.data?.message || t('errorOccurred'),
         severity: 'error'
       });
     } finally {
@@ -194,13 +253,13 @@ const Users = () => {
 
   const fetchUsers = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await getUsers(globalSearch);
-      setUsers(data);
-      setError(null);
+      const response = await getUsers(globalSearch);
+      setUsers(response?.users || []);
     } catch (err) {
-      setError('Failed to load users');
-      console.error(err);
+      setError(t('failedToLoadUsers'));
+      console.error('Error fetching users:', err);
     } finally {
       setLoading(false);
     }
@@ -212,7 +271,14 @@ const Users = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+      <Box sx={{ 
+        p: 3,
+        pt: !isRTL ? 10 : 3,
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        minHeight: '200px'
+      }}>
         <CircularProgress />
       </Box>
     );
@@ -220,11 +286,26 @@ const Users = () => {
 
   if (error) {
     return (
-      <Box sx={{ mt: 2 }}>
-        <Alert severity="error">{error}</Alert>
+      <Box sx={{ 
+        p: 3,
+        pt: !isRTL ? 10 : 3
+      }}>
+        <Alert 
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={fetchUsers}>
+              {t('retry')}
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
       </Box>
     );
   }
+
+  // Ensure users is always an array
+  const usersList = Array.isArray(users) ? users : [];
 
   return (
     <Box sx={{ 
@@ -248,108 +329,117 @@ const Users = () => {
         </Button>
       </Box>
       
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('name')}</TableCell>
-              <TableCell>{t('email')}</TableCell>
-              <TableCell>{t('role')}</TableCell>
-              <TableCell>{t('status')}</TableCell>
-              <TableCell>{t('lastActive')}</TableCell>
-              <TableCell align="right">{t('actions')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.id} hover>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar 
-                      src={user.avatar} 
-                      alt={user.name}
-                      sx={{ 
-                        width: 40, 
-                        height: 40,
-                        bgcolor: user.avatar ? 'transparent' : 'primary.main',
-                        '& img': {
-                          objectFit: 'cover',
-                          width: '100%',
-                          height: '100%'
-                        }
-                      }}
-                    >
-                      {!user.avatar && user.name.charAt(0).toUpperCase()}
-                    </Avatar>
-                    <Box>
-                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                        {user.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        @{user.username}
+      {usersList.length === 0 ? (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          {t('noUsersFound')}
+        </Alert>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('name')}</TableCell>
+                <TableCell>{t('email')}</TableCell>
+                <TableCell>{t('role')}</TableCell>
+                <TableCell>{t('status')}</TableCell>
+                <TableCell>{t('lastActive')}</TableCell>
+                <TableCell align="right">{t('actions')}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {usersList.map((user) => (
+                <TableRow key={user.id} hover>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Avatar 
+                        src={getAvatarUrl(user.avatar)}
+                        alt={user.name}
+                        sx={{ 
+                          width: 40, 
+                          height: 40,
+                          bgcolor: user.avatar ? 'transparent' : 'primary.main',
+                          '& img': {
+                            objectFit: 'cover',
+                            width: '100%',
+                            height: '100%'
+                          }
+                        }}
+                      >
+                        {!user.avatar && user.name?.charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                          {user.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          @{user.username}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={t(user.role.toLowerCase())}
+                      size="small"
+                      color={user.role === 'Admin' ? 'primary' : 'default'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={t(user.status.toLowerCase())}
+                      size="small"
+                      color={user.status === 'Active' ? 'success' : 'default'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography 
+                        variant="body2" 
+                        color={user.lastActive ? 'textPrimary' : 'textSecondary'}
+                      >
+                        {formatLastActive(user.lastActive, isRTL) || t('never')}
                       </Typography>
                     </Box>
-                  </Box>
-                </TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={t(user.role.toLowerCase())}
-                    size="small"
-                    color={user.role === 'Admin' ? 'primary' : 'default'}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={t(user.status.toLowerCase())}
-                    size="small"
-                    color={user.status === 'Active' ? 'success' : 'default'}
-                  />
-                </TableCell>
-                <TableCell>
-                  {new Date(user.lastActive).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </TableCell>
-                <TableCell align="right">
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                    <Tooltip title={user.status === 'Active' ? t('deactivate') : t('activate')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleStatusToggle(user)}
-                        color={user.status === 'Active' ? 'success' : 'default'}
-                      >
-                        {user.status === 'Active' ? <CheckCircleIcon /> : <BlockIcon />}
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('edit')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenDialog('edit', user)}
-                        color="primary"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('delete')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteClick(user)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
+                  </TableCell>
+                  <TableCell align="right">
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                      <Tooltip title={user.status === 'Active' ? t('deactivate') : t('activate')}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleStatusToggle(user)}
+                          color={user.status === 'Active' ? 'success' : 'default'}
+                        >
+                          {user.status === 'Active' ? <CheckCircleIcon /> : <BlockIcon />}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('edit')}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenDialog('edit', user)}
+                          color="primary"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('delete')}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteClick(user)}
+                          color="error"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+      
       {/* Create/Edit User Dialog */}
       <Dialog 
         open={openDialog} 
@@ -362,6 +452,55 @@ const Users = () => {
         </DialogTitle>
         <DialogContent>
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Avatar
+                src={getAvatarUrl(formData.avatar)}
+                sx={{ 
+                  width: 100, 
+                  height: 100,
+                  mr: 2,
+                  bgcolor: formData.avatar ? 'transparent' : 'primary.main'
+                }}
+              >
+                {!formData.avatar && (formData.name || '').charAt(0).toUpperCase()}
+              </Avatar>
+              <Box>
+                <input
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  id="avatar-upload"
+                  type="file"
+                  onChange={handleAvatarChange}
+                />
+                <label htmlFor="avatar-upload">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    startIcon={<AddIcon />}
+                  >
+                    {t('uploadAvatar')}
+                  </Button>
+                </label>
+                {formData.avatar && (
+                  <Button
+                    variant="text"
+                    color="error"
+                    onClick={handleRemoveAvatar}
+                    sx={{ ml: 1 }}
+                  >
+                    {t('removeAvatar')}
+                  </Button>
+                )}
+              </Box>
+            </Box>
+            <TextField
+              fullWidth
+              label={t('name')}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              margin="normal"
+              required
+            />
             <TextField
               fullWidth
               label={t('username')}
@@ -400,7 +539,6 @@ const Users = () => {
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 label={t('role')}
-                required
               >
                 <MenuItem value="user">{t('user')}</MenuItem>
                 <MenuItem value="admin">{t('admin')}</MenuItem>

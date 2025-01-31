@@ -23,11 +23,13 @@ import {
   Snackbar,
   Alert,
   Grid,
+  Link,
+  Avatar,
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import { TimeField } from '@mui/x-date-pickers/TimeField';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -46,139 +48,382 @@ import { format } from 'date-fns';
 import { arSA } from 'date-fns/locale';
 
 const Reports = () => {
+  const API_URL = 'http://localhost:5005';
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
+  const { searchTerm } = useSearch();
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [address, setAddress] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedTime, setSelectedTime] = useState('');
-  const [attachments, setAttachments] = useState([]);
-  const [editingReport, setEditingReport] = useState(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [reportToDelete, setReportToDelete] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
   const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const { globalSearch } = useSearch();
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    address: '',
+    date: new Date(),
+    time: new Date(),
+    attachments: []
+  });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+  const [previewDialog, setPreviewDialog] = useState({
+    open: false,
+    attachment: null
+  });
+
+  // Helper function to get avatar URL
+  const getAvatarUrl = (avatarPath) => {
+    if (!avatarPath) return undefined;
+    
+    console.log('Processing avatar path:', avatarPath);
+    
+    if (avatarPath.startsWith('data:')) return avatarPath;
+    
+    // If the path already starts with http://, return it as is
+    if (avatarPath.startsWith('http://')) return avatarPath;
+    
+    // Clean up the path by removing any duplicate URL prefixes
+    const cleanPath = avatarPath.replace(/^http:\/\/localhost:5005\//, '').replace(/^uploads\//, '');
+    const finalUrl = `${API_URL}/uploads/${cleanPath}`;
+    
+    console.log('Final avatar URL:', finalUrl);
+    return finalUrl;
+  };
 
   useEffect(() => {
+    console.log('Reports component mounted or search changed');
     fetchReports();
-  }, [globalSearch]);
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return format(d, isRTL ? 'dd/MM/yyyy' : 'MM/dd/yyyy', { locale: isRTL ? arSA : undefined });
-  };
-
-  const formatTime = (time) => {
-    if (!time) return '';
-    return format(new Date(`2000-01-01T${time}`), isRTL ? 'HH:mm' : 'hh:mm a', { locale: isRTL ? arSA : undefined });
-  };
+  }, [searchTerm]);
 
   const fetchReports = async () => {
-    setLoading(true);
     try {
-      const data = await getReports(globalSearch);
-      const filteredReports = user.role === 'Admin' 
-        ? data 
-        : data.filter(report => report.userId === user.id);
-      setReports(filteredReports);
+      setLoading(true);
       setError(null);
+      console.log('Fetching reports...');
+      const data = await getReports();
+      console.log('Reports data received:', data);
+      setReports(Array.isArray(data) ? data : []);
+      console.log('Reports state updated:', Array.isArray(data) ? data : []);
     } catch (err) {
-      setError('Failed to load reports');
-      console.error(err);
+      console.error('Error fetching reports:', err);
+      setError(t('failedToFetchReports'));
+      setReports([]); // Reset reports on error
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOpen = (report = null) => {
-    if (report) {
-      setEditingReport(report);
-      setTitle(report.title);
-      setContent(report.content);
-      setAddress(report.address);
-      setSelectedDate(new Date(report.date));
-      setSelectedTime(report.time);
-      setAttachments(report.attachments || []);
-    } else {
-      setEditingReport(null);
-      setTitle('');
-      setContent('');
-      setAddress('');
-      setSelectedDate(new Date());
-      setSelectedTime('');
-      setAttachments([]);
-    }
+  const handleOpen = () => {
     setOpen(true);
+    setEditMode(false);
+    setSelectedReport(null);
+    setFormData({
+      title: '',
+      content: '',
+      address: '',
+      date: new Date(),
+      time: new Date(),
+      attachments: []
+    });
   };
 
   const handleClose = () => {
     setOpen(false);
-    setEditingReport(null);
+    setEditMode(false);
+    setSelectedReport(null);
+  };
+
+  const handleEdit = (report) => {
+    console.log('Editing report:', report);
+    setEditMode(true);
+    setSelectedReport(report);
+    setFormData({
+      title: report.title,
+      content: report.content,
+      date: new Date(report.date),
+      time: new Date(`2025-01-25T${report.time}`),
+      address: report.address,
+      attachments: Array.isArray(report.attachments) ? [...report.attachments] : []
+    });
+    setOpen(true);
+  };
+
+  const handleInputChange = (field) => (event) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleDateChange = (date) => {
+    setFormData(prev => ({
+      ...prev,
+      date
+    }));
+  };
+
+  const handleTimeChange = (newTime) => {
+    if (!newTime) return;
+    
+    const date = new Date(newTime);
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    
+    const updatedTime = new Date();
+    updatedTime.setHours(hours);
+    updatedTime.setMinutes(minutes);
+    updatedTime.setSeconds(0);
+    updatedTime.setMilliseconds(0);
+    
+    setFormData(prev => ({
+      ...prev,
+      time: updatedTime
+    }));
+  };
+
+  const handleFileChange = (event) => {
+    try {
+      const files = Array.from(event.target.files);
+      
+      // Validate file size (max 5MB per file)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      const invalidFiles = files.filter(file => file.size > maxSize);
+      
+      if (invalidFiles.length > 0) {
+        setError(t('fileSizeExceedsLimit', { maxSize: '5MB' }));
+        setSnackbar({
+          open: true,
+          message: t('fileSizeExceedsLimit', { maxSize: '5MB' }),
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Validate file types
+      const allowedTypes = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const invalidTypeFiles = files.filter(file => !allowedTypes.some(type => file.type.startsWith(type)));
+
+      if (invalidTypeFiles.length > 0) {
+        setError(t('invalidFileType'));
+        setSnackbar({
+          open: true,
+          message: t('invalidFileType'),
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Add files to form data
+      setFormData(prev => {
+        const newAttachments = [...(prev.attachments || []), ...files];
+        console.log('Updated attachments after adding files:', newAttachments);
+        return {
+          ...prev,
+          attachments: newAttachments
+        };
+      });
+
+      // Clear any previous errors
+      setError(null);
+      
+      // Clear the file input
+      event.target.value = '';
+    } catch (err) {
+      console.error('Error handling file upload:', err);
+      setError(t('errorUploadingFile'));
+      setSnackbar({
+        open: true,
+        message: t('errorUploadingFile'),
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleRemoveFile = (index) => {
+    console.log('Removing file at index:', index);
+    console.log('Current attachments:', formData.attachments);
+    
+    setFormData(prevFormData => {
+      // Get the file being removed
+      const fileToRemove = prevFormData.attachments[index];
+      console.log('File being removed:', fileToRemove);
+      
+      // If it's an existing attachment, log its details
+      if (fileToRemove && !(fileToRemove instanceof File)) {
+        console.log('Removing existing attachment:', {
+          id: fileToRemove.id,
+          name: fileToRemove.originalName || fileToRemove.name,
+          type: fileToRemove.mimeType
+        });
+      }
+      
+      // Remove the file from attachments array
+      const updatedAttachments = prevFormData.attachments.filter((_, i) => i !== index);
+      console.log('Updated attachments array:', updatedAttachments);
+      
+      return {
+        ...prevFormData,
+        attachments: updatedAttachments
+      };
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('content', content);
-    formData.append('address', address);
-    formData.append('date', format(selectedDate, 'yyyy-MM-dd'));
-    formData.append('time', selectedTime);
-    formData.append('userId', user.id);
-    formData.append('userName', user.name);
-    attachments.forEach(file => {
-      if (file instanceof File) {
-        formData.append('attachments', file);
-      }
-    });
-
     try {
-      if (editingReport) {
-        await updateReport(editingReport.id, formData);
-      } else {
-        await addReport(formData);
+      setLoading(true);
+      setError(null);
+      
+      // Validate required fields
+      if (!formData.title || !formData.content || !formData.date || !formData.time || !formData.address) {
+        throw new Error(t('pleaseCompleteAllRequiredFields'));
       }
-      handleClose();
-      fetchReports();
-    } catch (error) {
-      console.error('Error:', error);
+
+      const formDataToSend = new FormData();
+      formDataToSend.append('title', formData.title);
+      formDataToSend.append('content', formData.content);
+      formDataToSend.append('date', format(formData.date, 'yyyy-MM-dd'));
+      formDataToSend.append('time', format(formData.time, 'HH:mm:ss'));
+      formDataToSend.append('address', formData.address || '');
+
+      // Handle attachments for update
+      if (editMode) {
+        // Get existing attachments (not File objects)
+        const existingAttachments = formData.attachments.filter(file => !(file instanceof File));
+        
+        // Get IDs of attachments to keep
+        const attachmentsToKeep = existingAttachments.map(file => file.id.toString());
+        
+        // Always send an array of IDs, even if empty
+        formDataToSend.append('attachmentsToKeep', JSON.stringify(attachmentsToKeep));
+      }
+
+      // Handle new file attachments
+      const newFiles = formData.attachments.filter(file => file instanceof File);
+      
+      // Validate files before appending
+      for (const file of newFiles) {
+        // Check file size (5MB limit)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+          throw new Error(t('fileSizeExceedsLimit', { maxSize: '5MB', filename: file.name }));
+        }
+
+        // Check file type
+        const allowedTypes = [
+          'image/jpeg',
+          'image/png',
+          'image/gif',
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
+        if (!allowedTypes.includes(file.type)) {
+          throw new Error(t('fileTypeNotAllowed', { filename: file.name, type: file.type }));
+        }
+
+        formDataToSend.append('attachments', file);
+      }
+
+      let response;
+      if (editMode && selectedReport) {
+        try {
+          response = await updateReport(selectedReport.id, formDataToSend);
+          
+          // Update the reports list with the new data
+          setReports(prevReports => {
+            return prevReports.map(r => {
+              if (r.id === response.id) {
+                return {
+                  ...response,
+                  attachments: response.attachments || [],
+                  user: response.user || r.user // Preserve user info if not in response
+                };
+              }
+              return r;
+            });
+          });
+
+          // Update selected report and form data
+          setSelectedReport(response);
+          setFormData(prev => ({
+            ...prev,
+            attachments: response.attachments || []
+          }));
+
+          setSnackbar({
+            open: true,
+            message: t('reportUpdated'),
+            severity: 'success'
+          });
+
+          handleClose();
+        } catch (err) {
+          setError(err.message);
+          setSnackbar({
+            open: true,
+            message: err.message,
+            severity: 'error'
+          });
+        }
+      } else {
+        try {
+          response = await addReport(formDataToSend);
+          setReports(prevReports => [{
+            ...response,
+            attachments: response.attachments || []
+          }, ...prevReports]);
+
+          setSnackbar({
+            open: true,
+            message: t('reportCreated'),
+            severity: 'success'
+          });
+
+          handleClose();
+        } catch (err) {
+          setError(err.message);
+          setSnackbar({
+            open: true,
+            message: err.message,
+            severity: 'error'
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error submitting report:', err);
+      setError(err.message || t('failedToSubmitReport'));
+      setSnackbar({
+        open: true,
+        message: err.message || t('failedToSubmitReport'),
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeleteClick = (report) => {
-    setReportToDelete(report);
-    setDeleteConfirmOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (reportToDelete) {
-      setLoading(true);
-      try {
-        await deleteReport(reportToDelete.id);
-        await fetchReports();
-        setDeleteConfirmOpen(false);
-        setReportToDelete(null);
-        setSnackbar({
-          open: true,
-          message: t('reportDeletedSuccessfully'),
-          severity: 'success'
-        });
-      } catch (err) {
-        console.error(err);
-        setSnackbar({
-          open: true,
-          message: t('failedToDeleteReport'),
-          severity: 'error'
-        });
-      } finally {
-        setLoading(false);
-      }
+  const handleDelete = async (report) => {
+    try {
+      await deleteReport(report.id);
+      setSnackbar({
+        open: true,
+        message: t('reportDeletedSuccessfully'),
+        severity: 'success'
+      });
+      fetchReports();
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      setSnackbar({
+        open: true,
+        message: t('failedToDeleteReport'),
+        severity: 'error'
+      });
     }
   };
 
@@ -200,13 +445,69 @@ const Reports = () => {
     }
   };
 
-  const handleOpenFile = (url) => {
-    window.open(url, '_blank');
+  const formatDate = (date) => {
+    return format(new Date(date), isRTL ? 'dd/MM/yyyy' : 'MM/dd/yyyy', { locale: isRTL ? arSA : undefined });
+  };
+
+  const formatTime = (time) => {
+    // Handle time string from backend (HH:mm:ss)
+    if (typeof time === 'string' && time.includes(':')) {
+      const [hours, minutes] = time.split(':');
+      const date = new Date();
+      date.setHours(parseInt(hours, 10));
+      date.setMinutes(parseInt(minutes, 10));
+      return format(date, isRTL ? 'HH:mm' : 'hh:mm a', { locale: isRTL ? arSA : undefined });
+    }
+    // Handle Date object (for form inputs)
+    if (time instanceof Date) {
+      return format(time, isRTL ? 'HH:mm' : 'hh:mm a', { locale: isRTL ? arSA : undefined });
+    }
+    return '';
+  };
+
+  const handlePreviewAttachment = (attachment) => {
+    console.log('Previewing attachment:', attachment);
+    
+    // Ensure we have a valid URL by properly constructing it
+    const fileUrl = attachment.url.startsWith('http') 
+      ? attachment.url 
+      : `${API_URL}${attachment.url}`;
+    
+    console.log('Opening file URL:', fileUrl);
+    
+    // For images and PDFs, show in dialog
+    if (attachment.mimeType?.startsWith('image/') || attachment.mimeType === 'application/pdf') {
+      setPreviewDialog({
+        open: true,
+        attachment: { 
+          ...attachment, 
+          fullUrl: fileUrl,
+          downloadUrl: fileUrl
+        }
+      });
+    } else {
+      // For other files, trigger download
+      window.open(fileUrl, '_blank');
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewDialog({
+      open: false,
+      attachment: null
+    });
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+      <Box sx={{ 
+        p: 3,
+        pt: !isRTL ? 10 : 3,
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        minHeight: '200px'
+      }}>
         <CircularProgress />
       </Box>
     );
@@ -214,8 +515,20 @@ const Reports = () => {
 
   if (error) {
     return (
-      <Box sx={{ mt: 2 }}>
-        <Alert severity="error">{error}</Alert>
+      <Box sx={{ 
+        p: 3,
+        pt: !isRTL ? 10 : 3
+      }}>
+        <Alert 
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={fetchReports}>
+              {t('retry')}
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
       </Box>
     );
   }
@@ -236,7 +549,7 @@ const Reports = () => {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => handleOpen()}
+          onClick={handleOpen}
         >
           {t('newReport')}
         </Button>
@@ -251,9 +564,7 @@ const Reports = () => {
               <TableCell sx={{ fontWeight: 600 }}>{t('address')}</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>{t('dateAndTime')}</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>{t('attachments')}</TableCell>
-              {user.role === 'Admin' && (
-                <TableCell sx={{ fontWeight: 600 }}>{t('createdBy')}</TableCell>
-              )}
+              <TableCell sx={{ fontWeight: 600 }}>{t('createdBy')}</TableCell>
               <TableCell align="center" sx={{ fontWeight: 600 }}>{t('actions')}</TableCell>
             </TableRow>
           </TableHead>
@@ -281,57 +592,75 @@ const Reports = () => {
                   </Box>
                 </TableCell>
                 <TableCell>
-                  {report.attachments && report.attachments.map((attachment, index) => (
-                    <Chip
-                      key={index}
-                      icon={<AttachFileIcon />}
-                      label={attachment.name}
-                      size="small"
-                      onClick={() => handleOpenFile(attachment.url)}
-                      sx={{ mr: 1, mb: 1 }}
-                    />
-                  ))}
-                </TableCell>
-                {user.role === 'Admin' && (
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {report.userName}
+                  {report.attachments?.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      {report.attachments.map((attachment, index) => {
+                        const FileIcon = getFileIcon(attachment.mimeType);
+                        return (
+                          <Tooltip key={index} title={attachment.originalName || attachment.filename}>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handlePreviewAttachment(attachment)}
+                            >
+                              <FileIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        );
+                      })}
+                    </Box>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">
+                      {t('noAttachments')}
                     </Typography>
-                  </TableCell>
-                )}
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Avatar
+                      src={report.user?.avatar ? getAvatarUrl(report.user.avatar) : undefined}
+                      alt={report.user?.name}
+                      sx={{ 
+                        width: 32, 
+                        height: 32,
+                        bgcolor: 'primary.main'
+                      }}
+                    >
+                      {report.user?.name?.charAt(0).toUpperCase()}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {report.user?.name || t('unknown')}
+                      </Typography>
+                      {report.user?.email && (
+                        <Typography variant="caption" color="text.secondary">
+                          {report.user.email}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                </TableCell>
                 <TableCell align="center">
                   <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-                    {(user.role === 'Admin' || report.userId === user.id) && (
-                      <>
-                        <Tooltip title={t('edit')}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpen(report)}
-                            color="primary"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={t('delete')}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteClick(report)}
-                            color="error"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    )}
-                    <Tooltip title={t('generatePDF')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleGeneratePDF(report)}
-                        color="primary"
-                      >
-                        <PictureAsPdfIcon />
-                      </IconButton>
-                    </Tooltip>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleEdit(report)}
+                      disabled={user.role.toLowerCase() !== 'admin' && report.user?.id !== user.id}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleDelete(report)}
+                      disabled={user.role.toLowerCase() !== 'admin' && report.user?.id !== user.id}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                    <IconButton 
+                      size="small"
+                      onClick={() => handleGeneratePDF(report)}
+                    >
+                      <PictureAsPdfIcon />
+                    </IconButton>
                   </Box>
                 </TableCell>
               </TableRow>
@@ -342,125 +671,220 @@ const Reports = () => {
 
       {/* Create/Edit Report Dialog */}
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+        <form onSubmit={handleSubmit} encType="multipart/form-data">
+          <DialogTitle>
+            {editMode ? t('editReport') : t('newReport')}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+              <TextField
+                label={t('title')}
+                value={formData.title}
+                onChange={handleInputChange('title')}
+                fullWidth
+                required
+              />
+              <TextField
+                label={t('content')}
+                value={formData.content}
+                onChange={handleInputChange('content')}
+                multiline
+                rows={4}
+                fullWidth
+                required
+              />
+              <TextField
+                label={t('address')}
+                value={formData.address}
+                onChange={handleInputChange('address')}
+                fullWidth
+                required
+              />
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={isRTL ? arSA : undefined}>
+                    <DatePicker
+                      label={t('date')}
+                      value={formData.date}
+                      onChange={handleDateChange}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          required: true
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={isRTL ? arSA : undefined}>
+                    <TimeField
+                      label={t('time')}
+                      value={formData.time}
+                      onChange={handleTimeChange}
+                      format="HH:mm"
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          required: true
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+              </Grid>
+              <Box>
+                <input
+                  type="file"
+                  id="attachments"
+                  name="attachments"
+                  multiple
+                  onChange={handleFileChange}
+                  style={{ display: 'none' }}
+                  accept="image/*,.pdf,.doc,.docx"
+                />
+                <label htmlFor="attachments">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    startIcon={<AttachFileIcon />}
+                  >
+                    {t('attachFiles')}
+                  </Button>
+                </label>
+                {formData.attachments?.length > 0 && (
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {formData.attachments.map((file, index) => {
+                      // Handle both new File objects and existing server attachments
+                      const isNewFile = file instanceof File;
+                      const FileIcon = getFileIcon(isNewFile ? file.type : file.mimeType);
+                      const fileName = isNewFile ? file.name : file.originalName || file.filename;
+                      const fileSize = isNewFile ? formatFileSize(file.size) : formatFileSize(file.size);
+                      
+                      return (
+                        <Chip
+                          key={index}
+                          label={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="caption">{fileName}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                ({fileSize})
+                              </Typography>
+                            </Box>
+                          }
+                          onDelete={() => handleRemoveFile(index)}
+                          icon={<FileIcon fontSize="small" />}
+                          sx={{ maxWidth: '300px' }}
+                        />
+                      );
+                    })}
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleClose}>{t('cancel')}</Button>
+            <Button 
+              type="submit"
+              variant="contained" 
+              disabled={loading}
+              startIcon={loading && <CircularProgress size={20} />}
+            >
+              {editMode ? t('update') : t('create')}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Add Preview Dialog */}
+      <Dialog
+        open={previewDialog.open}
+        onClose={handleClosePreview}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>
-          {editingReport ? t('editReport') : t('newReport')}
+          {previewDialog.attachment?.originalName || previewDialog.attachment?.filename || t('preview')}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField
-              label={t('title')}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              fullWidth
-              required
-            />
-            <TextField
-              label={t('content')}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              multiline
-              rows={4}
-              fullWidth
-              required
-            />
-            <TextField
-              label={t('address')}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              fullWidth
-              required
-            />
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} locale={isRTL ? arSA : undefined}>
-                  <DatePicker
-                    label={t('date')}
-                    value={selectedDate}
-                    onChange={(newValue) => setSelectedDate(newValue)}
-                    renderInput={(params) => <TextField {...params} fullWidth required />}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} locale={isRTL ? arSA : undefined}>
-                  <TimePicker
-                    label={t('time')}
-                    value={selectedTime}
-                    onChange={(newValue) => setSelectedTime(newValue)}
-                    renderInput={(params) => <TextField {...params} fullWidth required />}
-                  />
-                </LocalizationProvider>
-              </Grid>
-            </Grid>
-            <input
-              type="file"
-              multiple
-              onChange={(e) => setAttachments([...e.target.files])}
-              style={{ display: 'none' }}
-              id="file-input"
-            />
-            <label htmlFor="file-input">
-              <Button
-                variant="outlined"
-                component="span"
-                startIcon={<AttachFileIcon />}
-              >
-                {t('attachFiles')}
-              </Button>
-            </label>
-            {attachments.length > 0 && (
-              <Box sx={{ mt: 2 }}>
-                {attachments.map((file, index) => (
-                  <Chip
-                    key={index}
-                    label={file.name}
-                    onDelete={() => {
-                      const newAttachments = [...attachments];
-                      newAttachments.splice(index, 1);
-                      setAttachments(newAttachments);
+          {previewDialog.attachment ? (
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              minHeight: '400px',
+              bgcolor: 'background.default'
+            }}>
+              {previewDialog.attachment.mimeType?.startsWith('image/') ? (
+                <img
+                  src={previewDialog.attachment.fullUrl}
+                  alt={previewDialog.attachment.originalName || previewDialog.attachment.filename}
+                  style={{ 
+                    maxWidth: '100%', 
+                    maxHeight: '70vh',
+                    objectFit: 'contain'
+                  }}
+                />
+              ) : previewDialog.attachment.mimeType === 'application/pdf' ? (
+                <iframe
+                  src={previewDialog.attachment.fullUrl}
+                  width="100%"
+                  height="600px"
+                  title={previewDialog.attachment.originalName || previewDialog.attachment.filename}
+                  style={{ border: 'none' }}
+                />
+              ) : (
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="body1" gutterBottom>
+                    {t('fileCannotBePreviewedDirectly')}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    href={previewDialog.attachment.fullUrl}
+                    download
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.open(previewDialog.attachment.fullUrl, '_blank');
                     }}
-                    sx={{ mr: 1, mb: 1 }}
-                  />
-                ))}
-              </Box>
-            )}
-          </Box>
+                  >
+                    {t('downloadFile')}
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body1">
+                {t('noFileToPreview')}
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose}>{t('cancel')}</Button>
-          <Button onClick={handleSubmit} variant="contained" color="primary">
-            {editingReport ? t('save') : t('create')}
-          </Button>
+          <Button onClick={handleClosePreview}>{t('close')}</Button>
+          {previewDialog.attachment && (
+            <Button
+              variant="contained"
+              onClick={() => window.open(previewDialog.attachment.fullUrl, '_blank')}
+            >
+              {t('download')}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
-      >
-        <DialogTitle>{t('confirmDelete')}</DialogTitle>
-        <DialogContent>
-          <Typography>
-            {reportToDelete && t('deleteReportConfirmation', { title: reportToDelete.title })}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>
-            {t('cancel')}
-          </Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            {t('delete')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
+      {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
       >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

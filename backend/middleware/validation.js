@@ -33,7 +33,7 @@ export const projectValidation = {
       .optional()
       .isIn(['low', 'medium', 'high'])
       .withMessage('Invalid priority value'),
-    body('startDate')
+    body('start_date')
       .optional()
       .isISO8601()
       .withMessage('Invalid start date format')
@@ -43,13 +43,13 @@ export const projectValidation = {
         }
         return true;
       }),
-    body('endDate')
+    body('end_date')
       .optional()
       .isISO8601()
       .withMessage('Invalid end date format')
       .custom((endDate, { req }) => {
-        if (endDate && req.body.startDate) {
-          const start = new Date(req.body.startDate);
+        if (endDate && req.body.start_date) {
+          const start = new Date(req.body.start_date);
           const end = new Date(endDate);
           if (end < start) {
             throw new Error('End date must be after start date');
@@ -112,17 +112,17 @@ export const projectValidation = {
       .optional()
       .isIn(['low', 'medium', 'high'])
       .withMessage('Invalid priority value'),
-    body('startDate')
+    body('start_date')
       .optional()
       .isISO8601()
       .withMessage('Invalid start date format'),
-    body('endDate')
+    body('end_date')
       .optional()
       .isISO8601()
       .withMessage('Invalid end date format')
       .custom((endDate, { req }) => {
-        if (endDate && req.body.startDate) {
-          const start = new Date(req.body.startDate);
+        if (endDate && req.body.start_date) {
+          const start = new Date(req.body.start_date);
           const end = new Date(endDate);
           if (end < start) {
             throw new Error('End date must be after start date');
@@ -158,17 +158,17 @@ export const projectValidation = {
       .optional()
       .isIn(['low', 'medium', 'high'])
       .withMessage('Invalid priority value'),
-    query('startDate')
+    query('start_date')
       .optional()
       .isISO8601()
       .withMessage('Invalid start date format'),
-    query('endDate')
+    query('end_date')
       .optional()
       .isISO8601()
       .withMessage('Invalid end date format'),
     query('sortBy')
       .optional()
-      .isIn(['name', 'status', 'priority', 'startDate', 'endDate', 'createdAt'])
+      .isIn(['name', 'status', 'priority', 'start_date', 'end_date', 'created_at'])
       .withMessage('Invalid sort field'),
     query('sortOrder')
       .optional()

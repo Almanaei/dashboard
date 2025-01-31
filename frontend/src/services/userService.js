@@ -2,6 +2,18 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5005/api/users';
 
+const getAuthHeaders = (includeContentType = true) => {
+  const headers = {
+    'Authorization': `Bearer ${localStorage.getItem('token')}`
+  };
+  
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  return { headers };
+};
+
 const MAX_IMAGE_SIZE = 800;
 const JPEG_QUALITY = 0.7;
 
@@ -56,10 +68,17 @@ const processAvatar = async (avatarData) => {
 
 export const getUsers = async (search = '') => {
   try {
+    console.log('Fetching users with headers:', getAuthHeaders());
     const response = await axios.get(API_URL, {
-      params: { search }
+      params: { search },
+      ...getAuthHeaders()
     });
-    return response.data;
+    
+    // Ensure we return an object with a users array
+    const data = response.data;
+    return {
+      users: Array.isArray(data) ? data : (data.users || [])
+    };
   } catch (error) {
     console.error('Error fetching users:', error.response?.data || error);
     throw error;
@@ -68,17 +87,17 @@ export const getUsers = async (search = '') => {
 
 export const getUserCount = async () => {
   try {
-    const response = await axios.get(`${API_URL}/count`);
+    const response = await axios.get(`${API_URL}/count`, getAuthHeaders());
     return response.data.count;
   } catch (error) {
-    console.error('Error fetching user count:', error.response?.data || error);
-    return 0;
+    console.error('Error getting user count:', error.response?.data || error);
+    throw error;
   }
 };
 
 export const getUser = async (id) => {
   try {
-    const response = await axios.get(`${API_URL}/users/${id}`);
+    const response = await axios.get(`${API_URL}/${id}`, getAuthHeaders());
     return response.data;
   } catch (error) {
     console.error('Error fetching user:', error.response?.data || error);
@@ -88,18 +107,18 @@ export const getUser = async (id) => {
 
 export const updateUserAvatar = async (id, avatarData) => {
   try {
-    const avatarBlob = await processAvatar(avatarData);
-    if (!avatarBlob) {
-      return null;
-    }
+    const blob = await processAvatar(avatarData);
+    if (!blob) return null;
 
     const formData = new FormData();
-    formData.append('avatar', avatarBlob, 'avatar.jpg');
+    formData.append('avatar', blob, 'avatar.jpg');
 
     const response = await axios.put(`${API_URL}/${id}/avatar`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: {
+        ...getAuthHeaders().headers,
+        'Content-Type': 'multipart/form-data'
+      }
     });
-
     return response.data;
   } catch (error) {
     console.error('Error updating avatar:', error.response?.data || error);
@@ -107,25 +126,14 @@ export const updateUserAvatar = async (id, avatarData) => {
   }
 };
 
-export const createUser = async (userData) => {
+export const createUser = async (formData) => {
   try {
-    const { avatar, ...userDataWithoutAvatar } = userData;
-    
-    // First create user without avatar
-    const response = await axios.post(API_URL, userDataWithoutAvatar);
-    const createdUser = response.data;
-
-    // Then update avatar if provided
-    if (avatar) {
-      try {
-        await updateUserAvatar(createdUser.id, avatar);
-      } catch (avatarError) {
-        console.error('Error uploading avatar:', avatarError);
-        // Continue even if avatar upload fails
+    const response = await axios.post(API_URL, formData, {
+      headers: {
+        ...getAuthHeaders(false).headers
       }
-    }
-
-    return createdUser;
+    });
+    return response.data;
   } catch (error) {
     console.error('Error creating user:', error.response?.data || error);
     throw error;
@@ -134,23 +142,36 @@ export const createUser = async (userData) => {
 
 export const updateUser = async (id, userData) => {
   try {
-    const { avatar, ...userDataWithoutAvatar } = userData;
+    console.log('Updating user with data:', userData);
+    const formData = new FormData();
     
-    // First update user data
-    const response = await axios.put(`${API_URL}/${id}`, userDataWithoutAvatar);
-    const updatedUser = response.data;
-
-    // Then update avatar if provided
-    if (avatar) {
-      try {
-        await updateUserAvatar(id, avatar);
-      } catch (avatarError) {
-        console.error('Error uploading avatar:', avatarError);
-        // Continue even if avatar upload fails
+    // Add all fields from userData except avatar
+    for (let [key, value] of userData.entries()) {
+      if (key !== 'avatar') {
+        formData.append(key, value);
       }
     }
+    
+    // Handle avatar separately
+    const avatarFile = userData.get('avatar');
+    if (avatarFile instanceof Blob) {
+      // If it's already a blob/file, use it directly
+      formData.append('avatar', avatarFile, 'avatar.jpg');
+    }
 
-    return updatedUser;
+    console.log('Sending form data to server:', {
+      id,
+      formDataKeys: Array.from(formData.keys()),
+      hasAvatar: formData.has('avatar'),
+      removeAvatar: formData.get('removeAvatar')
+    });
+
+    const response = await axios.put(`${API_URL}/${id}`, formData, {
+      headers: {
+        ...getAuthHeaders(false).headers
+      }
+    });
+    return response.data;
   } catch (error) {
     console.error('Error updating user:', error.response?.data || error);
     throw error;
@@ -159,7 +180,8 @@ export const updateUser = async (id, userData) => {
 
 export const deleteUser = async (id) => {
   try {
-    await axios.delete(`${API_URL}/${id}`);
+    const response = await axios.delete(`${API_URL}/${id}`, getAuthHeaders());
+    return response.data;
   } catch (error) {
     console.error('Error deleting user:', error.response?.data || error);
     throw error;
@@ -168,10 +190,11 @@ export const deleteUser = async (id) => {
 
 export const updateUserStatus = async (id, status) => {
   try {
-    const response = await axios.patch(`${API_URL}/${id}/status`, { status });
+    const response = await axios.put(`${API_URL}/${id}/status`, { status }, getAuthHeaders());
     return response.data;
   } catch (error) {
     console.error('Error updating user status:', error.response?.data || error);
     throw error;
   }
 };
+
