@@ -1,6 +1,7 @@
 import { sequelize } from '../config/database.js';
 import { Project, User, Report } from '../models/index.js';
 import { Op } from 'sequelize';
+import { format } from 'date-fns';
 
 // Get project overview statistics
 export const getProjectStats = async (req, res) => {
@@ -9,7 +10,7 @@ export const getProjectStats = async (req, res) => {
 
     // Get total projects count by status
     const statusCount = await Project.findAll({
-      where: { createdBy: userId },
+      where: { created_by: userId },
       attributes: [
         'status',
         [sequelize.fn('COUNT', sequelize.col('id')), 'count']
@@ -19,7 +20,7 @@ export const getProjectStats = async (req, res) => {
 
     // Get total projects count by priority
     const priorityCount = await Project.findAll({
-      where: { createdBy: userId },
+      where: { created_by: userId },
       attributes: [
         'priority',
         [sequelize.fn('COUNT', sequelize.col('id')), 'count']
@@ -29,7 +30,7 @@ export const getProjectStats = async (req, res) => {
 
     // Get total budget allocation
     const budgetStats = await Project.findAll({
-      where: { createdBy: userId },
+      where: { created_by: userId },
       attributes: [
         [sequelize.fn('SUM', sequelize.col('budget')), 'totalBudget'],
         [sequelize.fn('AVG', sequelize.col('budget')), 'averageBudget']
@@ -39,16 +40,16 @@ export const getProjectStats = async (req, res) => {
     // Get projects timeline stats
     const timelineStats = await Project.findAll({
       where: { 
-        createdBy: userId,
-        startDate: { [Op.not]: null },
-        endDate: { [Op.not]: null }
+        created_by: userId,
+        start_date: { [Op.not]: null },
+        end_date: { [Op.not]: null }
       },
       attributes: [
-        [sequelize.fn('MIN', sequelize.col('startDate')), 'earliestStart'],
-        [sequelize.fn('MAX', sequelize.col('endDate')), 'latestEnd'],
+        [sequelize.fn('MIN', sequelize.col('start_date')), 'earliestStart'],
+        [sequelize.fn('MAX', sequelize.col('end_date')), 'latestEnd'],
         [sequelize.fn('AVG', 
           sequelize.fn('EXTRACT', 'epoch', 
-            sequelize.fn('AGE', sequelize.col('endDate'), sequelize.col('startDate'))
+            sequelize.fn('AGE', sequelize.col('end_date'), sequelize.col('start_date'))
           )
         ), 'averageDuration']
       ]
@@ -78,26 +79,20 @@ export const getProjectStats = async (req, res) => {
 export const getProjectTrends = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { period = 'M' } = req.query;
-    const endDate = new Date();
-    let startDate;
+    const { period = 'M', start_date, end_date } = req.query;
+    const endDate = end_date ? new Date(end_date) : new Date();
+    let startDate = start_date ? new Date(start_date) : new Date(endDate);
     let truncPeriod;
 
-    // Set date range and truncation based on period
+    // Set truncation based on period
     switch (period) {
       case 'D':
-        startDate = new Date(endDate);
-        startDate.setDate(endDate.getDate() - 30);
         truncPeriod = 'day';
         break;
       case 'Y':
-        startDate = new Date(endDate);
-        startDate.setFullYear(endDate.getFullYear() - 2);
         truncPeriod = 'month';
         break;
       default: // 'M'
-        startDate = new Date(endDate);
-        startDate.setFullYear(endDate.getFullYear() - 1);
         truncPeriod = 'month';
     }
 
@@ -154,9 +149,9 @@ export const getProjectTrends = async (req, res) => {
     // Create a map for all dates with zero counts
     const trendsMap = new Map();
     allDates.forEach(date => {
-      const truncatedDate = sequelize.fn('date_trunc', truncPeriod, date);
-      trendsMap.set(truncatedDate.toString(), {
-        date: date,
+      const formattedDate = format(date, period === 'D' ? 'yyyy-MM-dd' : period === 'M' ? 'yyyy-MM' : 'yyyy');
+      trendsMap.set(formattedDate, {
+        date: date.toISOString(),
         projectCount: 0,
         reportCount: 0
       });
@@ -165,28 +160,26 @@ export const getProjectTrends = async (req, res) => {
     // Add project counts
     projectTrends.forEach(trend => {
       const date = trend.getDataValue('date');
+      const formattedDate = format(date, period === 'D' ? 'yyyy-MM-dd' : period === 'M' ? 'yyyy-MM' : 'yyyy');
       const count = parseInt(trend.getDataValue('projectCount'), 10) || 0;
-      if (trendsMap.has(date.toString())) {
-        trendsMap.get(date.toString()).projectCount = count;
+      if (trendsMap.has(formattedDate)) {
+        trendsMap.get(formattedDate).projectCount = count;
       }
     });
 
     // Add report counts
     reportTrends.forEach(trend => {
       const date = trend.getDataValue('date');
+      const formattedDate = format(date, period === 'D' ? 'yyyy-MM-dd' : period === 'M' ? 'yyyy-MM' : 'yyyy');
       const count = parseInt(trend.getDataValue('reportCount'), 10) || 0;
-      if (trendsMap.has(date.toString())) {
-        trendsMap.get(date.toString()).reportCount = count;
+      if (trendsMap.has(formattedDate)) {
+        trendsMap.get(formattedDate).reportCount = count;
       }
     });
 
     // Convert map to array and sort by date
     const formattedTrends = Array.from(trendsMap.values())
-      .sort((a, b) => a.date - b.date)
-      .map(trend => ({
-        ...trend,
-        date: trend.date.toISOString()
-      }));
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     res.json(formattedTrends);
   } catch (error) {
@@ -202,12 +195,12 @@ export const getProjectPerformance = async (req, res) => {
 
     // Calculate completion rate
     const totalProjects = await Project.count({
-      where: { createdBy: userId }
+      where: { created_by: userId }
     });
 
     const completedProjects = await Project.count({
       where: { 
-        createdBy: userId,
+        created_by: userId,
         status: 'completed'
       }
     });
@@ -215,9 +208,9 @@ export const getProjectPerformance = async (req, res) => {
     // Calculate on-time completion rate
     const onTimeProjects = await Project.count({
       where: {
-        createdBy: userId,
+        created_by: userId,
         status: 'completed',
-        endDate: {
+        end_date: {
           [Op.lte]: sequelize.col('updatedAt')
         }
       }
@@ -226,16 +219,16 @@ export const getProjectPerformance = async (req, res) => {
     // Get average project duration by priority
     const durationByPriority = await Project.findAll({
       where: {
-        createdBy: userId,
+        created_by: userId,
         status: 'completed',
-        startDate: { [Op.not]: null },
-        endDate: { [Op.not]: null }
+        start_date: { [Op.not]: null },
+        end_date: { [Op.not]: null }
       },
       attributes: [
         'priority',
         [sequelize.fn('AVG',
           sequelize.fn('EXTRACT', 'epoch',
-            sequelize.fn('AGE', sequelize.col('endDate'), sequelize.col('startDate'))
+            sequelize.fn('AGE', sequelize.col('end_date'), sequelize.col('start_date'))
           )
         ), 'averageDuration']
       ],

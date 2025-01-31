@@ -123,11 +123,11 @@ function generateDateRange(startDate, endDate, period) {
       case 'D':
         currentDate.setDate(currentDate.getDate() + 1);
         break;
-      case 'Y':
+      case 'M':
         currentDate.setMonth(currentDate.getMonth() + 1);
         break;
-      default: // 'M'
-        currentDate.setMonth(currentDate.getMonth() + 1);
+      case 'Y':
+        currentDate.setFullYear(currentDate.getFullYear() + 1);
         break;
     }
   }
@@ -137,8 +137,20 @@ function generateDateRange(startDate, endDate, period) {
 
 const Dashboard = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('M');
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    switch (selectedPeriod) {
+      case 'D':
+        return subDays(date, 30);
+      case 'M':
+        return subMonths(date, 12);
+      case 'Y':
+        return subYears(date, 2);
+      default:
+        return subMonths(date, 12);
+    }
+  });
+  const [endDate, setEndDate] = useState(new Date());
   const [statistics, setStatistics] = useState({
     projects: 0,
     reports: 0,
@@ -151,12 +163,40 @@ const Dashboard = () => {
   const [chartOptions, setChartOptions] = useState({
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
     plugins: {
       legend: {
-        display: false
+        display: true,
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          boxWidth: 6,
+          boxHeight: 6,
+          padding: 20,
+          color: '#666666',
+          font: {
+            size: 12
+          }
+        }
       },
       tooltip: {
-        enabled: true
+        enabled: true,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        titleColor: '#1a1a1a',
+        bodyColor: '#666666',
+        borderColor: 'rgba(0, 0, 0, 0.1)',
+        borderWidth: 1,
+        padding: 10,
+        boxPadding: 4,
+        usePointStyle: true,
+        callbacks: {
+          label: function(context) {
+            return ` ${context.dataset.label}: ${context.parsed.y}`;
+          }
+        }
       }
     },
     scales: {
@@ -176,8 +216,7 @@ const Dashboard = () => {
         }
       },
       y: {
-        min: 0,
-        max: 100,
+        beginAtZero: true,
         position: 'right',
         grid: {
           color: 'rgba(0, 0, 0, 0.05)',
@@ -189,21 +228,21 @@ const Dashboard = () => {
           color: '#666666',
           font: {
             size: 10
-          },
-          callback: (value) => value.toString()
+          }
         }
       }
     },
     elements: {
       line: {
+        borderWidth: 2,
+        tension: 0.4,
         borderCapStyle: 'round',
         borderJoinStyle: 'round'
-      }
-    },
-    layout: {
-      padding: {
-        left: 10,
-        right: 10
+      },
+      point: {
+        radius: 0,
+        hitRadius: 8,
+        hoverRadius: 4
       }
     }
   });
@@ -286,87 +325,106 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
+
+        // Calculate date range based on selected period
+        let periodStartDate = startDate;
+        if (!startDate) {
+          const now = new Date();
+          switch (selectedPeriod) {
+            case 'D':
+              periodStartDate = subDays(now, 30);
+              break;
+            case 'M':
+              periodStartDate = subMonths(now, 12);
+              break;
+            case 'Y':
+              periodStartDate = subYears(now, 2);
+              break;
+            default:
+              periodStartDate = subMonths(now, 12);
+          }
+          setStartDate(periodStartDate);
+        }
+
         // Fetch statistics
         const statsResponse = await fetch(`${API_URL}/api/statistics/dashboard`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const statsData = await statsResponse.json();
         
         if (!statsResponse.ok) {
-          throw new Error(statsData.error || 'Failed to fetch statistics');
+          throw new Error('Failed to fetch statistics');
         }
-
+        
+        const statsData = await statsResponse.json();
         setStatistics({
           projects: statsData.projectCount || 0,
           reports: statsData.reportCount || 0,
           users: statsData.userCount || 0
         });
 
-        // Calculate date range based on selected period
-        const endDate = new Date();
-        let startDate;
-        let dateFormat;
-        
-        switch (selectedPeriod) {
-          case 'D':
-            startDate = subDays(endDate, 30);
-            dateFormat = 'MMM dd';
-            break;
-          case 'Y':
-            startDate = subYears(endDate, 2); // Last 2 years
-            dateFormat = 'yyyy';
-            break;
-          default: // Monthly
-            startDate = subYears(endDate, 1);
-            dateFormat = 'MMM yyyy';
-        }
+        // Fetch trends data with date range
+        const trendsResponse = await fetch(
+          `${API_URL}/api/statistics/projects/trends?` + new URLSearchParams({
+            period: selectedPeriod,
+            start_date: format(periodStartDate, 'yyyy-MM-dd'),
+            end_date: format(endDate || new Date(), 'yyyy-MM-dd')
+          }), {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
 
-        // Fetch trends data
-        const trendsResponse = await fetch(`${API_URL}/api/statistics/projects/trends?period=${selectedPeriod}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
         if (!trendsResponse.ok) {
           throw new Error('Failed to fetch trends');
         }
-        
+
         const trendsData = await trendsResponse.json();
 
-        // Process trends data
-        const dates = generateDateRange(startDate, endDate, selectedPeriod);
-        const projectCounts = new Array(dates.length).fill(0);
-        const reportCounts = new Array(dates.length).fill(0);
+        // Generate date labels based on period
+        const dateFormat = selectedPeriod === 'D' ? 'MMM dd' : selectedPeriod === 'M' ? 'MMM yyyy' : 'yyyy';
+        const dates = generateDateRange(periodStartDate, endDate || new Date(), selectedPeriod);
+        const labels = dates.map(date => format(date, dateFormat));
 
-        // Map the trends data to the appropriate arrays
-        trendsData.forEach(trend => {
-          const date = new Date(trend.date);
-          const dateStr = format(date, dateFormat);
-          const index = dates.findIndex(d => format(new Date(d), dateFormat) === dateStr);
+        // Initialize data arrays with zeros
+        const projectData = new Array(labels.length).fill(0);
+        const reportData = new Array(labels.length).fill(0);
+
+        // Fill in the actual data
+        trendsData.forEach(item => {
+          const itemDate = new Date(item.date);
+          const formattedDate = format(itemDate, dateFormat);
+          const index = labels.findIndex(label => label === formattedDate);
           
           if (index !== -1) {
-            projectCounts[index] = trend.projectCount || 0;
-            reportCounts[index] = trend.reportCount || 0;
+            projectData[index] = item.projectCount || 0;
+            reportData[index] = item.reportCount || 0;
           }
         });
 
-        // Find the maximum value for y-axis scaling
-        const maxCount = Math.max(
-          ...projectCounts,
-          ...reportCounts
+        // Find max value for y-axis
+        const maxValue = Math.max(
+          ...projectData,
+          ...reportData,
+          1  // Ensure we always have a non-zero max value
         );
-        const yAxisMax = Math.ceil(maxCount / 10) * 10 || 10; // Default to 10 if no data
 
-        // Update chart options with new max value
+        // Calculate appropriate step size and max value
+        const stepSize = Math.max(1, Math.ceil(maxValue / 5));
+        const maxAxisValue = Math.ceil(maxValue / stepSize) * stepSize;
+
+        // Update chart options with new max value and step size
         setChartOptions(prev => ({
           ...prev,
           scales: {
             ...prev.scales,
             y: {
               ...prev.scales.y,
-              max: yAxisMax,
+              beginAtZero: true,
+              max: maxAxisValue,
               ticks: {
                 ...prev.scales.y.ticks,
-                stepSize: Math.ceil(yAxisMax / 5)
+                stepSize: stepSize
               }
             }
           }
@@ -374,23 +432,21 @@ const Dashboard = () => {
 
         // Set chart data
         setChartData({
-          labels: dates.map(date => format(new Date(date), dateFormat)),
+          labels,
           datasets: [
             {
               label: 'Projects',
-              data: projectCounts,
+              data: projectData,
               borderColor: '#2196F3',
               backgroundColor: 'rgba(33, 150, 243, 0.1)',
-              borderWidth: 2,
               fill: true,
               tension: 0.4
             },
             {
               label: 'Reports',
-              data: reportCounts,
+              data: reportData,
               borderColor: '#4CAF50',
               backgroundColor: 'rgba(76, 175, 80, 0.1)',
-              borderWidth: 2,
               fill: true,
               tension: 0.4
             }
@@ -399,11 +455,13 @@ const Dashboard = () => {
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         setError(error.message);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
-  }, [API_URL, token, selectedPeriod]);
+  }, [API_URL, token, selectedPeriod, startDate, endDate]);
 
   // Fetch projects with updated date handling
   useEffect(() => {
@@ -1405,7 +1463,7 @@ const Dashboard = () => {
   };
 
   return (
-    <Box sx={{ flexGrow: 1, p: 3 }}>
+    <Box sx={{ flexGrow: 1, p: 3, mt: 2 }}>
       {/* Header Section */}
       <Box sx={{ 
         display: 'flex', 
