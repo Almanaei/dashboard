@@ -275,132 +275,65 @@ const Reports = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     try {
       setLoading(true);
       setError(null);
-      
+
       // Validate required fields
       if (!formData.title || !formData.content || !formData.date || !formData.time || !formData.address) {
-        throw new Error(t('pleaseCompleteAllRequiredFields'));
+        throw new Error(t('allFieldsRequired'));
       }
 
-      const formDataToSend = new FormData();
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('content', formData.content);
-      formDataToSend.append('date', format(formData.date, 'yyyy-MM-dd'));
-      formDataToSend.append('time', format(formData.time, 'HH:mm:ss'));
-      formDataToSend.append('address', formData.address || '');
+      // Format date and time
+      const formattedDate = format(formData.date, 'yyyy-MM-dd');
+      const formattedTime = format(formData.time, 'HH:mm:ss');
 
-      // Handle attachments for update
-      if (editMode) {
-        // Get existing attachments (not File objects)
-        const existingAttachments = formData.attachments.filter(file => !(file instanceof File));
-        
-        // Get IDs of attachments to keep
-        const attachmentsToKeep = existingAttachments.map(file => file.id.toString());
-        
-        // Always send an array of IDs, even if empty
-        formDataToSend.append('attachmentsToKeep', JSON.stringify(attachmentsToKeep));
-      }
+      // Create FormData object
+      const data = new FormData();
+      data.append('title', formData.title);
+      data.append('content', formData.content);
+      data.append('date', formattedDate);
+      data.append('time', formattedTime);
+      data.append('address', formData.address);
 
-      // Handle new file attachments
-      const newFiles = formData.attachments.filter(file => file instanceof File);
-      
-      // Validate files before appending
-      for (const file of newFiles) {
-        // Check file size (5MB limit)
-        const maxSize = 5 * 1024 * 1024; // 5MB
-        if (file.size > maxSize) {
-          throw new Error(t('fileSizeExceedsLimit', { maxSize: '5MB', filename: file.name }));
-        }
-
-        // Check file type
-        const allowedTypes = [
-          'image/jpeg',
-          'image/png',
-          'image/gif',
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ];
-        if (!allowedTypes.includes(file.type)) {
-          throw new Error(t('fileTypeNotAllowed', { filename: file.name, type: file.type }));
-        }
-
-        formDataToSend.append('attachments', file);
+      // Append attachments
+      if (formData.attachments && formData.attachments.length > 0) {
+        formData.attachments.forEach(file => {
+          if (file instanceof File) {
+            data.append('attachments', file);
+          }
+        });
       }
 
       let response;
       if (editMode && selectedReport) {
-        try {
-          response = await updateReport(selectedReport.id, formDataToSend);
-          
-          // Update the reports list with the new data
-          setReports(prevReports => {
-            return prevReports.map(r => {
-              if (r.id === response.id) {
-                return {
-                  ...response,
-                  attachments: response.attachments || [],
-                  user: response.user || r.user // Preserve user info if not in response
-                };
-              }
-              return r;
-            });
-          });
-
-          // Update selected report and form data
-          setSelectedReport(response);
-          setFormData(prev => ({
-            ...prev,
-            attachments: response.attachments || []
-          }));
-
-          setSnackbar({
-            open: true,
-            message: t('reportUpdated'),
-            severity: 'success'
-          });
-
-          handleClose();
-        } catch (err) {
-          setError(err.message);
-          setSnackbar({
-            open: true,
-            message: err.message,
-            severity: 'error'
-          });
-        }
+        // If editing, append the list of attachments to keep
+        const attachmentsToKeep = formData.attachments
+          .filter(att => att.id) // Only existing attachments have IDs
+          .map(att => att.id);
+        data.append('attachmentsToKeep', JSON.stringify(attachmentsToKeep));
+        
+        response = await updateReport(selectedReport.id, data);
       } else {
-        try {
-          response = await addReport(formDataToSend);
-          setReports(prevReports => [{
-            ...response,
-            attachments: response.attachments || []
-          }, ...prevReports]);
-
-          setSnackbar({
-            open: true,
-            message: t('reportCreated'),
-            severity: 'success'
-          });
-
-          handleClose();
-        } catch (err) {
-          setError(err.message);
-          setSnackbar({
-            open: true,
-            message: err.message,
-            severity: 'error'
-          });
-        }
+        response = await addReport(data);
       }
-    } catch (err) {
-      console.error('Error submitting report:', err);
-      setError(err.message || t('failedToSubmitReport'));
+
       setSnackbar({
         open: true,
-        message: err.message || t('failedToSubmitReport'),
+        message: editMode ? t('reportUpdated') : t('reportCreated'),
+        severity: 'success'
+      });
+
+      // Close dialog and refresh reports
+      handleClose();
+      await fetchReports();
+    } catch (err) {
+      console.error('Error submitting report:', err);
+      setError(err.message || t('errorSubmittingReport'));
+      setSnackbar({
+        open: true,
+        message: err.message || t('errorSubmittingReport'),
         severity: 'error'
       });
     } finally {

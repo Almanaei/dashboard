@@ -43,39 +43,28 @@ export const getReports = async (search = '') => {
 
 export const addReport = async (formData) => {
   try {
-    // Log the form data for debugging
-    console.log('Adding report with formData:');
-    for (let [key, value] of formData.entries()) {
-      if (key === 'attachments') {
-        console.log('attachments:', Array.from(value.name));
-      } else {
-        console.log(`${key}:`, value);
-      }
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication required');
     }
 
-    const response = await axios.post(API_URL, formData, {
+    const response = await fetch(API_URL, {
+      method: 'POST',
       headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'multipart/form-data'
-      }
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
     });
 
-    console.log('Add report response:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('Error adding report:', error);
-    if (error.response?.status === 401) {
-      console.error('Authentication error: Token might be invalid or expired');
-      // Clear invalid token
-      localStorage.removeItem('token');
-      throw new Error('Authentication failed. Please log in again.');
-    } else if (error.response?.data?.error) {
-      throw new Error(error.response.data.error);
-    } else if (error.message) {
-      throw new Error(error.message);
-    } else {
-      throw new Error('Failed to create report. Please try again.');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to create report');
     }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error in addReport:', error);
+    throw error;
   }
 };
 
@@ -261,5 +250,25 @@ export const generatePDF = async (reportId) => {
     }
     console.error('Error generating PDF:', error.response?.data || error);
     throw error;
+  }
+};
+
+export const getReportById = async (reportId) => {
+  try {
+    const headers = getAuthHeaders();
+    const response = await axios.get(`${API_URL}/${reportId}`, {
+      headers: headers
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching report:', error.response?.data || error);
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    if (error.response?.status === 404) {
+      throw new Error('Report not found or has been deleted');
+    }
+    throw new Error(error.response?.data?.message || error.message || 'Failed to fetch report');
   }
 };

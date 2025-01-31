@@ -64,6 +64,8 @@ import {
   Message as MessageIcon,
   Close as CloseIcon,
   DoneAll as DoneAllIcon,
+  Description as ReportIcon,
+  Assignment as ProjectIcon,
 } from '@mui/icons-material';
 import { Line } from 'react-chartjs-2';
 import {
@@ -84,6 +86,7 @@ import { useAuth } from '../context/AuthContext';
 import { format, parseISO, isValid, addDays, subDays, subMonths, subYears } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
+import { getReportById } from '../services/reportService';
 
 ChartJS.register(
   CategoryScale,
@@ -219,6 +222,12 @@ const Dashboard = () => {
   const [drawerTab, setDrawerTab] = useState(0);
   const [drawerSearchQuery, setDrawerSearchQuery] = useState('');
   const messagesEndRef = useRef(null);
+  const [mentionedItem, setMentionedItem] = useState(null);
+  const [mentionDialogOpen, setMentionDialogOpen] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionSearchQuery, setMentionSearchQuery] = useState('');
+  const mentionAnchorRef = useRef(null);
 
   // Configure date adapter locale and format
   const adapterLocale = {
@@ -1106,6 +1115,175 @@ const Dashboard = () => {
     }
   }, [conversation]);
 
+  // Add this function to parse and format message content with mentions
+  const formatMessageContent = (content) => {
+    // Match @report-{id} or @project-{id}
+    const mentionRegex = /@(report|project)-([a-zA-Z0-9-]+)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = mentionRegex.exec(content)) !== null) {
+      // Add text before the mention
+      if (match.index > lastIndex) {
+        parts.push(content.slice(lastIndex, match.index));
+      }
+
+      // Add the mention component
+      const [fullMatch, type, id] = match;
+      parts.push(
+        <Button
+          key={match.index}
+          size="small"
+          onClick={() => handleMentionClick(type, id)}
+          sx={{
+            p: 0,
+            minWidth: 'auto',
+            textTransform: 'none',
+            color: 'inherit',
+            fontWeight: 'bold',
+            '&:hover': {
+              textDecoration: 'underline',
+              background: 'none'
+            }
+          }}
+        >
+          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            {type === 'report' ? <ReportIcon fontSize="small" /> : <ProjectIcon fontSize="small" />}
+            {`@${type}-${id}`}
+          </Box>
+        </Button>
+      );
+
+      lastIndex = match.index + fullMatch.length;
+    }
+
+    // Add remaining text
+    if (lastIndex < content.length) {
+      parts.push(content.slice(lastIndex));
+    }
+
+    return parts;
+  };
+
+  // Update the handleMentionClick function
+  const handleMentionClick = async (type, id) => {
+    try {
+      let data;
+      if (type === 'report') {
+        data = await getReportById(id);
+      } else if (type === 'project') {
+        const response = await fetch(`${API_URL}/api/projects/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!response.ok) {
+          throw new Error('Failed to load project');
+        }
+        data = await response.json();
+      }
+
+      const transformedData = {
+        type,
+        data: {
+          id: data.id,
+          title: type === 'report' ? data.title : data.name,
+          description: type === 'report' ? data.content : data.description,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+          status: data.status,
+          owner: data.user || data.owner,
+          metrics: data.metrics || {},
+          attachments: data.attachments || [],
+          // Additional fields for reports
+          date: type === 'report' ? data.date : null,
+          time: type === 'report' ? data.time : null,
+          address: type === 'report' ? data.address : null,
+          // Additional fields for projects
+          start_date: type === 'project' ? data.start_date : null,
+          end_date: type === 'project' ? data.end_date : null,
+          progress: type === 'project' ? data.progress : null,
+          category: type === 'project' ? data.category : null,
+          tags: type === 'project' ? data.tags : []
+        }
+      };
+
+      setMentionedItem(transformedData);
+      setMentionDialogOpen(true);
+    } catch (error) {
+      console.error(`Error fetching ${type}:`, error);
+      setNotification({
+        open: true,
+        message: error.message || `Failed to load ${type}. Please try again later.`,
+        severity: 'error'
+      });
+    }
+  };
+
+  // Add this function to fetch suggestions
+  const fetchMentionSuggestions = async (query) => {
+    try {
+      const [projectsResponse, reportsResponse] = await Promise.all([
+        fetch(`${API_URL}/api/projects?search=${query}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/reports?search=${query}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      const [projects, reports] = await Promise.all([
+        projectsResponse.json(),
+        reportsResponse.json()
+      ]);
+
+      return [
+        ...projects.map(p => ({ id: p.id, title: p.name, type: 'project' })),
+        ...reports.map(r => ({ id: r.id, title: r.title, type: 'report' }))
+      ];
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      return [];
+    }
+  };
+
+  // Add function to handle message input changes with mention support
+  const handleMessageInputChange = async (e) => {
+    const value = e.target.value;
+    setMessageInput(value);
+
+    // Check for @ symbol
+    const lastAtSymbol = value.lastIndexOf('@');
+    if (lastAtSymbol !== -1 && lastAtSymbol === value.length - 1) {
+      // Show suggestions when @ is typed
+      setShowMentionSuggestions(true);
+      setMentionSearchQuery('');
+      const suggestions = await fetchMentionSuggestions('');
+      setMentionSuggestions(suggestions);
+      mentionAnchorRef.current = e.target;
+    } else if (lastAtSymbol !== -1) {
+      // Update suggestions based on what's typed after @
+      const query = value.slice(lastAtSymbol + 1);
+      setMentionSearchQuery(query);
+      const suggestions = await fetchMentionSuggestions(query);
+      setMentionSuggestions(suggestions);
+      setShowMentionSuggestions(true);
+      mentionAnchorRef.current = e.target;
+    } else {
+      setShowMentionSuggestions(false);
+    }
+  };
+
+  // Add function to handle mention selection
+  const handleMentionSelect = (item) => {
+    const lastAtSymbol = messageInput.lastIndexOf('@');
+    const newValue = messageInput.slice(0, lastAtSymbol) + `@${item.type}-${item.id} `;
+    setMessageInput(newValue);
+    setShowMentionSuggestions(false);
+  };
+
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
       {/* Header Section */}
@@ -1618,7 +1796,7 @@ const Dashboard = () => {
                       }}
                     >
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {message.content}
+                        {formatMessageContent(message.content)}
                       </Typography>
                     </Box>
                     <Typography 
@@ -1660,9 +1838,9 @@ const Dashboard = () => {
             <TextField
               fullWidth
               variant="outlined"
-              placeholder="Type a message..."
+              placeholder="Type a message... (Use @ to mention)"
               value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
+              onChange={handleMessageInputChange}
               onKeyPress={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -1698,6 +1876,63 @@ const Dashboard = () => {
               <SendIcon />
             </IconButton>
           </Box>
+
+          {/* Add Mention Suggestions Popover */}
+          <Menu
+            open={showMentionSuggestions}
+            onClose={() => setShowMentionSuggestions(false)}
+            anchorEl={mentionAnchorRef.current}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
+            }}
+            sx={{
+              '& .MuiPaper-root': {
+                width: 320,
+                maxHeight: 300,
+                overflow: 'auto'
+              }
+            }}
+          >
+            {mentionSuggestions.length === 0 ? (
+              <MenuItem disabled>
+                <Typography variant="body2" color="text.secondary">
+                  No items found
+                </Typography>
+              </MenuItem>
+            ) : (
+              mentionSuggestions.map((item) => (
+                <MenuItem
+                  key={`${item.type}-${item.id}`}
+                  onClick={() => handleMentionSelect(item)}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    py: 1
+                  }}
+                >
+                  {item.type === 'report' ? (
+                    <ReportIcon fontSize="small" color="action" />
+                  ) : (
+                    <ProjectIcon fontSize="small" color="action" />
+                  )}
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {item.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {item.type.charAt(0).toUpperCase() + item.type.slice(1)} #{item.id}
+                    </Typography>
+                  </Box>
+                </MenuItem>
+              ))
+            )}
+          </Menu>
         </DialogContent>
       </Dialog>
 
@@ -1972,6 +2207,126 @@ const Dashboard = () => {
           )}
         </Box>
       </Drawer>
+
+      {/* Mention Dialog */}
+      <Dialog
+        open={mentionDialogOpen}
+        onClose={() => setMentionDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {mentionedItem?.type === 'report' ? <ReportIcon /> : <ProjectIcon />}
+            <Typography>
+              {mentionedItem?.type === 'report' ? 'Report Details' : 'Project Details'}
+            </Typography>
+          </Box>
+          <IconButton
+            aria-label="close"
+            onClick={() => setMentionDialogOpen(false)}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {mentionedItem && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                {mentionedItem.data.title}
+              </Typography>
+              
+              <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Chip 
+                  label={mentionedItem.data.status || 'Active'} 
+                  color={mentionedItem.data.status === 'completed' ? 'success' : 'primary'} 
+                  size="small" 
+                />
+                {mentionedItem.data.owner && (
+                  <Typography variant="body2" color="text.secondary">
+                    Owner: {mentionedItem.data.owner.username}
+                  </Typography>
+                )}
+              </Box>
+
+              <Typography variant="body1" paragraph>
+                {mentionedItem.data.description || 'No description available.'}
+              </Typography>
+
+              {mentionedItem.data.metrics && Object.keys(mentionedItem.data.metrics).length > 0 && (
+                <Box sx={{ mt: 2, mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Metrics
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {Object.entries(mentionedItem.data.metrics).map(([key, value]) => (
+                      <Grid item xs={6} key={key}>
+                        <Paper sx={{ p: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {key}
+                          </Typography>
+                          <Typography variant="body2">
+                            {value}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+
+              {mentionedItem.data.attachments && mentionedItem.data.attachments.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Attachments
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {mentionedItem.data.attachments.map((attachment, index) => (
+                      <Chip
+                        key={index}
+                        icon={<AttachmentIcon />}
+                        label={attachment.name}
+                        variant="outlined"
+                        size="small"
+                        onClick={() => window.open(attachment.url, '_blank')}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Created: {formatDate(mentionedItem.data.created_at)}
+                </Typography>
+                {mentionedItem.data.updated_at && (
+                  <Typography variant="body2" color="text.secondary">
+                    Updated: {formatDate(mentionedItem.data.updated_at)}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMentionDialogOpen(false)}>Close</Button>
+          <Button 
+            variant="contained" 
+            onClick={() => {
+              setMentionDialogOpen(false);
+              navigate(`/statistics/${mentionedItem.type}s/${mentionedItem.data.id}`);
+            }}
+            startIcon={mentionedItem?.type === 'report' ? <ReportIcon /> : <ProjectIcon />}
+          >
+            View Full Details
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

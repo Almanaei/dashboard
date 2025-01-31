@@ -191,6 +191,54 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get a single report by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const report = await Report.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'role', 'name', 'avatar']
+        },
+        {
+          model: ReportAttachment,
+          as: 'attachments'
+        }
+      ]
+    });
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    // Check if user has permission to view the report
+    if (req.user.role.toLowerCase() !== 'admin' && report.user_id !== req.user.id) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Transform the report to ensure consistent format
+    const plainReport = report.get({ plain: true });
+    const transformedReport = {
+      ...plainReport,
+      attachments: plainReport.attachments?.map(attachment => ({
+        ...attachment,
+        url: attachment.url.startsWith('http') ? attachment.url : `/uploads/${attachment.filename}`
+      })) || []
+    };
+
+    res.json(transformedReport);
+  } catch (error) {
+    console.error('Error getting report:', error);
+    res.status(500).json({ 
+      message: 'Failed to get report', 
+      error: error.message 
+    });
+  }
+});
+
 // Create a new report
 router.post('/', upload.array('attachments'), async (req, res) => {
   let transaction;
@@ -223,7 +271,7 @@ router.post('/', upload.array('attachments'), async (req, res) => {
       date,
       time,
       address,
-      userId: req.user.id
+      user_id: req.user.id
     };
     
     console.log('Creating report with data:', reportData);
