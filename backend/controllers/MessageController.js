@@ -390,4 +390,52 @@ export const markAsRead = async (req, res) => {
     console.error('Error marking message as read:', error);
     res.status(500).json({ error: 'Failed to mark message as read' });
   }
+};
+
+// Clear conversation between two users
+export const clearConversation = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    const current_user_id = req.user.id;
+
+    // Check if the conversation is allowed to be cleared
+    const isAllowed = await canSendMessage(current_user_id, user_id) || 
+                     await canSendMessage(user_id, current_user_id);
+    
+    if (!isAllowed) {
+      return res.status(403).json({ error: 'You can only clear conversations with administrators' });
+    }
+
+    // Soft delete all messages between the two users
+    await Message.update(
+      { deleted_at: new Date() },
+      {
+        where: {
+          [Op.or]: [
+            { sender_id: current_user_id, recipient_id: user_id },
+            { sender_id: user_id, recipient_id: current_user_id }
+          ],
+          deleted_at: null
+        }
+      }
+    );
+
+    // Emit socket event if the other user is online
+    if (req.io) {
+      const otherUser = await User.findByPk(user_id);
+      if (otherUser && otherUser.socket_id) {
+        const otherUserSocket = req.io.sockets.sockets.get(otherUser.socket_id);
+        if (otherUserSocket) {
+          otherUserSocket.emit('conversation_cleared', {
+            with_user_id: current_user_id
+          });
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error clearing conversation:', error);
+    res.status(500).json({ error: 'Failed to clear conversation' });
+  }
 }; 

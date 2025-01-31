@@ -41,6 +41,7 @@ import {
   Tabs,
   Tab,
   InputAdornment,
+  ListItemIcon
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -66,6 +67,8 @@ import {
   DoneAll as DoneAllIcon,
   Description as ReportIcon,
   Assignment as ProjectIcon,
+  DeleteSweep as DeleteSweepIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 import { Line } from 'react-chartjs-2';
 import {
@@ -87,6 +90,15 @@ import { format, parseISO, isValid, addDays, subDays, subMonths, subYears } from
 import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import { getReportById } from '../services/reportService';
+import {
+  getMessages,
+  sendMessage,
+  editMessage,
+  deleteMessage,
+  clearConversation,
+  markAsRead,
+  addReaction
+} from '../services/messageService';
 
 ChartJS.register(
   CategoryScale,
@@ -228,6 +240,12 @@ const Dashboard = () => {
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [mentionSearchQuery, setMentionSearchQuery] = useState('');
   const mentionAnchorRef = useRef(null);
+  const [messageMenuAnchor, setMessageMenuAnchor] = useState(null);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editMessageContent, setEditMessageContent] = useState('');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   // Configure date adapter locale and format
   const adapterLocale = {
@@ -1284,6 +1302,108 @@ const Dashboard = () => {
     setShowMentionSuggestions(false);
   };
 
+  // Add these handlers before the return statement
+  const handleMessageMenuOpen = (event, message) => {
+    event.preventDefault();
+    event.stopPropagation();
+    console.log('Opening menu for message:', message); // Debug log
+    setSelectedMessage(message);
+    setMessageMenuAnchor(event.currentTarget);
+  };
+
+  const handleMessageMenuClose = () => {
+    setMessageMenuAnchor(null);
+  };
+
+  const handleEditClick = () => {
+    console.log('Edit clicked, selected message:', selectedMessage); // Debug log
+    if (selectedMessage) {
+      setEditMessageContent(selectedMessage.content);
+      setEditDialogOpen(true);
+      handleMessageMenuClose();
+    }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!selectedMessage) return;
+    
+    try {
+      console.log('Editing message:', selectedMessage.id, editMessageContent); // Debug log
+      await editMessage(selectedMessage.id, editMessageContent);
+      setConversation(prev => prev.map(msg => 
+        msg.id === selectedMessage.id 
+          ? { ...msg, content: editMessageContent, edited_at: new Date().toISOString() }
+          : msg
+      ));
+      setEditDialogOpen(false);
+      setSelectedMessage(null);
+      setEditMessageContent('');
+      setNotification({
+        open: true,
+        message: 'Message edited successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error editing message:', error); // Debug log
+      setNotification({
+        open: true,
+        message: error.message || 'Failed to edit message',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (selectedMessage) {
+      setDeleteConfirmOpen(true);
+      handleMessageMenuClose();
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedMessage) return;
+
+    try {
+      await deleteMessage(selectedMessage.id);
+      setConversation(prev => prev.filter(msg => msg.id !== selectedMessage.id));
+      setDeleteConfirmOpen(false);
+      setNotification({
+        open: true,
+        message: 'Message deleted successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      setNotification({
+        open: true,
+        message: error.message || 'Failed to delete message',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleClearClick = () => {
+    setClearConfirmOpen(true);
+  };
+
+  const handleClearConfirm = async () => {
+    try {
+      await clearConversation(selectedUser.id);
+      setConversation([]);
+      setClearConfirmOpen(false);
+      setNotification({
+        open: true,
+        message: 'Conversation cleared successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      setNotification({
+        open: true,
+        message: error.message,
+        severity: 'error'
+      });
+    }
+  };
+
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
       {/* Header Section */}
@@ -1704,44 +1824,26 @@ const Dashboard = () => {
         onClose={handleCloseMessageDialog}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            height: '80vh',
-            maxHeight: 600,
-            display: 'flex',
-            flexDirection: 'column'
-          }
-        }}
       >
-        <DialogTitle sx={{ 
-          px: 2, 
-          py: 1.5,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
-              {selectedUser?.initials || selectedUser?.username?.charAt(0).toUpperCase()}
-            </Avatar>
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {selectedUser?.username}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {selectedUser?.role === 'admin' ? 'Administrator' : 'User'}
-              </Typography>
-            </Box>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+          <Typography variant="h6">
+            {selectedUser?.username}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton
+              onClick={handleClearClick}
+              size="small"
+              title="Clear conversation"
+            >
+              <DeleteSweepIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              onClick={handleCloseMessageDialog}
+              size="small"
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
           </Box>
-          <IconButton
-            aria-label="close"
-            onClick={handleCloseMessageDialog}
-            size="small"
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
         </DialogTitle>
         <DialogContent sx={{ p: 2 }}>
           <Box
@@ -1766,7 +1868,7 @@ const Dashboard = () => {
                   sx={{
                     display: 'flex',
                     flexDirection: isCurrentUser ? 'row-reverse' : 'row',
-                    alignItems: 'flex-end',
+                    alignItems: 'flex-start',
                     gap: 1,
                     ml: isCurrentUser ? 'auto' : 0,
                     mr: isCurrentUser ? 0 : 'auto',
@@ -1778,23 +1880,50 @@ const Dashboard = () => {
                       sx={{ 
                         width: 28, 
                         height: 28,
-                        bgcolor: 'primary.main',
                         fontSize: '0.875rem'
                       }}
                     >
                       {selectedUser?.initials || selectedUser?.username?.charAt(0).toUpperCase()}
                     </Avatar>
                   )}
-                  <Box>
+                  <Box sx={{ position: 'relative' }}>
                     <Box
+                      className="message-container"
                       sx={{
                         backgroundColor: isCurrentUser ? 'primary.main' : 'grey.100',
                         color: isCurrentUser ? 'white' : 'text.primary',
                         borderRadius: 2,
                         p: 1.5,
-                        position: 'relative'
+                        position: 'relative',
+                        '&:hover .message-menu': {
+                          opacity: 1
+                        }
                       }}
                     >
+                      {isCurrentUser && (
+                        <IconButton
+                          className="message-menu"
+                          size="small"
+                          onClick={(e) => handleMessageMenuOpen(e, message)}
+                          sx={{
+                            position: 'absolute',
+                            right: -32,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            opacity: 0,
+                            transition: 'opacity 0.2s',
+                            color: 'text.secondary',
+                            backgroundColor: 'background.paper',
+                            boxShadow: 1,
+                            '&:hover': {
+                              backgroundColor: 'background.paper',
+                              color: 'primary.main'
+                            }
+                          }}
+                        >
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      )}
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                         {formatMessageContent(message.content)}
                       </Typography>
@@ -1810,12 +1939,12 @@ const Dashboard = () => {
                       }}
                     >
                       {formatDate(message.created_at)}
+                      {message.edited_at && ' (edited)'}
                       {message.read_at && isCurrentUser && (
                         <DoneAllIcon 
                           sx={{ 
                             ml: 0.5, 
                             fontSize: '0.875rem',
-                            verticalAlign: 'middle',
                             color: 'primary.main'
                           }} 
                         />
@@ -1826,114 +1955,150 @@ const Dashboard = () => {
               );
             })}
           </Box>
-          <Box 
-            sx={{ 
-              display: 'flex', 
-              gap: 1,
-              pt: 1,
-              borderTop: '1px solid',
-              borderColor: 'divider'
-            }}
-          >
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Type a message... (Use @ to mention)"
-              value={messageInput}
-              onChange={handleMessageInputChange}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              multiline
-              maxRows={4}
-              size="small"
-              InputProps={{
-                sx: {
-                  borderRadius: 2,
-                  backgroundColor: 'grey.50'
-                }
-              }}
-            />
-            <IconButton 
-              color="primary" 
-              onClick={handleSendMessage}
-              disabled={!messageInput.trim()}
-              sx={{
-                bgcolor: 'primary.main',
-                color: 'white',
-                '&:hover': {
-                  bgcolor: 'primary.dark'
-                },
-                '&.Mui-disabled': {
-                  bgcolor: 'grey.300',
-                  color: 'grey.500'
-                }
-              }}
-            >
-              <SendIcon />
-            </IconButton>
-          </Box>
-
-          {/* Add Mention Suggestions Popover */}
-          <Menu
-            open={showMentionSuggestions}
-            onClose={() => setShowMentionSuggestions(false)}
-            anchorEl={mentionAnchorRef.current}
-            anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'left',
-            }}
-            transformOrigin={{
-              vertical: 'top',
-              horizontal: 'left',
-            }}
-            sx={{
-              '& .MuiPaper-root': {
-                width: 320,
-                maxHeight: 300,
-                overflow: 'auto'
+          <TextField
+            fullWidth
+            placeholder="Type a message..."
+            value={messageInput}
+            onChange={(e) => setMessageInput(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
               }
             }}
-          >
-            {mentionSuggestions.length === 0 ? (
-              <MenuItem disabled>
-                <Typography variant="body2" color="text.secondary">
-                  No items found
-                </Typography>
-              </MenuItem>
-            ) : (
-              mentionSuggestions.map((item) => (
-                <MenuItem
-                  key={`${item.type}-${item.id}`}
-                  onClick={() => handleMentionSelect(item)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    py: 1
-                  }}
-                >
-                  {item.type === 'report' ? (
-                    <ReportIcon fontSize="small" color="action" />
-                  ) : (
-                    <ProjectIcon fontSize="small" color="action" />
-                  )}
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {item.title}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {item.type.charAt(0).toUpperCase() + item.type.slice(1)} #{item.id}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))
-            )}
-          </Menu>
+            multiline
+            maxRows={4}
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
+
+        {/* Message Menu */}
+        <Menu
+          anchorEl={messageMenuAnchor}
+          open={Boolean(messageMenuAnchor)}
+          onClose={handleMessageMenuClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'right',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'right',
+          }}
+          sx={{
+            '& .MuiPaper-root': {
+              minWidth: 150,
+              boxShadow: 2
+            }
+          }}
+        >
+          <MenuItem 
+            onClick={handleEditClick}
+            sx={{
+              gap: 1,
+              py: 1
+            }}
+          >
+            <ListItemIcon>
+              <EditIcon fontSize="small" />
+            </ListItemIcon>
+            <Typography variant="body2">Edit Message</Typography>
+          </MenuItem>
+          <MenuItem 
+            onClick={handleDeleteClick} 
+            sx={{ 
+              color: 'error.main',
+              gap: 1,
+              py: 1
+            }}
+          >
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" sx={{ color: 'error.main' }} />
+            </ListItemIcon>
+            <Typography variant="body2">Delete Message</Typography>
+          </MenuItem>
+        </Menu>
+
+        {/* Edit Dialog */}
+        <Dialog 
+          open={editDialogOpen} 
+          onClose={() => {
+            setEditDialogOpen(false);
+            setEditMessageContent('');
+            setSelectedMessage(null);
+          }}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Edit Message</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              value={editMessageContent}
+              onChange={(e) => setEditMessageContent(e.target.value)}
+              sx={{ mt: 2 }}
+              autoFocus
+              placeholder="Edit your message..."
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => {
+                setEditDialogOpen(false);
+                setEditMessageContent('');
+                setSelectedMessage(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleEditSubmit} 
+              variant="contained"
+              disabled={!editMessageContent.trim()}
+            >
+              Save Changes
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog 
+          open={deleteConfirmOpen} 
+          onClose={() => setDeleteConfirmOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Delete Message</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Are you sure you want to delete this message? This action cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleDeleteConfirm} 
+              color="error"
+              variant="contained"
+            >
+              Delete
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Clear Conversation Dialog */}
+        <Dialog open={clearConfirmOpen} onClose={() => setClearConfirmOpen(false)}>
+          <DialogTitle>Clear Conversation</DialogTitle>
+          <DialogContent>
+            <Typography>Are you sure you want to clear this entire conversation? This action cannot be undone.</Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setClearConfirmOpen(false)}>Cancel</Button>
+            <Button onClick={handleClearConfirm} color="error">Clear</Button>
+          </DialogActions>
+        </Dialog>
       </Dialog>
 
       {/* Notification Snackbar */}

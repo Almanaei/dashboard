@@ -1,5 +1,5 @@
 import express from 'express';
-import { sendMessage, getConversation, markAsRead, editMessage, deleteMessage, reactToMessage, getConversations } from '../controllers/MessageController.js';
+import { sendMessage, getConversation, markAsRead, editMessage, deleteMessage, reactToMessage, getConversations, clearConversation } from '../controllers/MessageController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -15,6 +15,9 @@ router.post('/', sendMessage);
 
 // Get conversation with another user
 router.get('/conversation/:user_id', getConversation);
+
+// Clear conversation with another user
+router.delete('/conversation/:user_id', clearConversation);
 
 // Mark message as read
 router.put('/:message_id/read', markAsRead);
