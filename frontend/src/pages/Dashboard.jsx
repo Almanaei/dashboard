@@ -705,6 +705,10 @@ const Dashboard = () => {
       newSocket.on('new_message', (message) => {
         if (selectedUser && (message.sender_id === selectedUser.id || message.recipient_id === selectedUser.id)) {
           setConversation(prev => [...prev, message]);
+          // If the message is for the current user and the conversation is open, mark it as read
+          if (message.recipient_id === user.id) {
+            markMessagesAsRead([message]);
+          }
         }
       });
 
@@ -864,7 +868,44 @@ const Dashboard = () => {
     }
   }, [selectedUser]);
 
-  // Add these functions before the return statement
+  // Add this function to mark messages as read
+  const markMessagesAsRead = async (messages) => {
+    try {
+      const unreadMessages = messages.filter(m => 
+        !m.read_at && m.recipient_id === user.id
+      );
+
+      await Promise.all(unreadMessages.map(message =>
+        fetch(`${API_URL}/api/messages/${message.id}/read`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+      ));
+
+      // Update local conversation state to mark messages as read
+      setConversation(prev => prev.map(m => ({
+        ...m,
+        read_at: m.recipient_id === user.id ? new Date().toISOString() : m.read_at
+      })));
+
+      // Update conversations list to reflect read status
+      setAllConversations(prev => prev.map(conv => {
+        if (conv.recipient_id === selectedUser?.id || conv.sender_id === selectedUser?.id) {
+          return {
+            ...conv,
+            unreadCount: 0
+          };
+        }
+        return conv;
+      }));
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
+
+  // Update the fetchConversation function to mark messages as read
   const fetchConversation = async () => {
     try {
       const response = await fetch(`${API_URL}/api/messages/conversation/${selectedUser.id}`, {
@@ -875,6 +916,8 @@ const Dashboard = () => {
       if (response.ok) {
         const data = await response.json();
         setConversation(data);
+        // Mark messages as read after fetching conversation
+        markMessagesAsRead(data);
       }
     } catch (error) {
       console.error('Error fetching conversation:', error);
