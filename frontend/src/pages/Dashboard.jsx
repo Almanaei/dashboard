@@ -63,6 +63,7 @@ import {
   Send as SendIcon,
   Message as MessageIcon,
   Close as CloseIcon,
+  DoneAll as DoneAllIcon,
 } from '@mui/icons-material';
 import { Line } from 'react-chartjs-2';
 import {
@@ -217,6 +218,7 @@ const Dashboard = () => {
   const [allConversations, setAllConversations] = useState([]);
   const [drawerTab, setDrawerTab] = useState(0);
   const [drawerSearchQuery, setDrawerSearchQuery] = useState('');
+  const messagesEndRef = useRef(null);
 
   // Configure date adapter locale and format
   const adapterLocale = {
@@ -909,25 +911,27 @@ const Dashboard = () => {
   // Update the fetchAllConversations function
   const fetchAllConversations = async () => {
     try {
-      // Get all users first
-      const usersResponse = await fetch(`${API_URL}/api/statistics/users`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      if (user.role === 'admin') {
+        // Admin flow remains the same
+        const usersResponse = await fetch(`${API_URL}/api/statistics/users`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!usersResponse.ok) {
+          throw new Error('Failed to fetch users');
         }
-      });
 
-      if (!usersResponse.ok) {
-        throw new Error('Failed to fetch users');
-      }
+        const usersData = await usersResponse.json();
+        const users = usersData.users || [];
 
-      const usersData = await usersResponse.json();
-      const users = usersData.users || [];
+        // Filter out current user
+        const relevantUsers = users.filter(u => u.id !== user.id);
 
-      // For each user, fetch their conversation if it exists
-      const conversationsWithMessages = await Promise.all(
-        users
-          .filter(u => u.id !== user.id) // Exclude current user
-          .map(async (otherUser) => {
+        // Fetch conversations for all users
+        const conversationsWithMessages = await Promise.all(
+          relevantUsers.map(async (otherUser) => {
             try {
               const messagesResponse = await fetch(
                 `${API_URL}/api/messages/conversation/${otherUser.id}`,
@@ -959,18 +963,80 @@ const Dashboard = () => {
               return null;
             }
           })
-      );
+        );
 
-      // Filter out null values and sort by most recent message
-      const sortedConversations = conversationsWithMessages
-        .filter(conv => conv !== null && conv.lastMessage) // Only show conversations with messages
-        .sort((a, b) => {
-          const dateA = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at) : new Date(0);
-          const dateB = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at) : new Date(0);
-          return dateB - dateA;
+        // Filter out null values and sort by most recent message
+        const sortedConversations = conversationsWithMessages
+          .filter(conv => conv !== null && conv.lastMessage)
+          .sort((a, b) => {
+            const dateA = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at) : new Date(0);
+            const dateB = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at) : new Date(0);
+            return dateB - dateA;
+          });
+
+        setAllConversations(sortedConversations);
+      } else {
+        // Regular user flow - fetch messages with admins
+        const messagesResponse = await fetch(
+          `${API_URL}/api/messages/list`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!messagesResponse.ok) {
+          throw new Error('Failed to fetch messages');
+        }
+
+        const messages = await messagesResponse.json();
+        
+        // Group messages by conversation and only keep admin conversations
+        const conversationMap = new Map();
+        
+        messages.forEach(message => {
+          const otherUser = message.sender_id === user.id ? message.recipient : message.sender;
+          
+          // Only process conversations with admin users
+          if (otherUser.role === 'admin') {
+            if (!conversationMap.has(otherUser.id)) {
+              conversationMap.set(otherUser.id, {
+                id: `${user.id}-${otherUser.id}`,
+                sender: user,
+                recipient: otherUser,
+                sender_id: user.id,
+                recipient_id: otherUser.id,
+                messages: [],
+                unreadCount: 0
+              });
+            }
+            
+            const conversation = conversationMap.get(otherUser.id);
+            conversation.messages.push(message);
+            if (!message.read_at && message.recipient_id === user.id) {
+              conversation.unreadCount++;
+            }
+          }
         });
 
-      setAllConversations(sortedConversations);
+        // Convert map to array and add last message
+        const conversations = Array.from(conversationMap.values()).map(conv => ({
+          ...conv,
+          lastMessage: conv.messages[conv.messages.length - 1]
+        }));
+
+        // Sort conversations by most recent message
+        const sortedConversations = conversations
+          .filter(conv => conv.lastMessage)
+          .sort((a, b) => {
+            const dateA = a.lastMessage?.created_at ? new Date(a.lastMessage.created_at) : new Date(0);
+            const dateB = b.lastMessage?.created_at ? new Date(b.lastMessage.created_at) : new Date(0);
+            return dateB - dateA;
+          });
+
+        setAllConversations(sortedConversations);
+      }
     } catch (error) {
       console.error('Error fetching conversations:', error);
       setNotification({
@@ -983,14 +1049,19 @@ const Dashboard = () => {
 
   // Add this effect to refresh conversations periodically
   useEffect(() => {
-    if (messagesDrawerOpen && user?.role === 'admin') {
+    if (messagesDrawerOpen) {
       fetchAllConversations();
-      // Set up periodic refresh
-      const refreshInterval = setInterval(fetchAllConversations, 30000); // Refresh every 30 seconds
-
+      const refreshInterval = setInterval(fetchAllConversations, 30000);
       return () => clearInterval(refreshInterval);
     }
   }, [messagesDrawerOpen]);
+
+  // Add this effect to scroll to bottom on new messages
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
+    }
+  }, [conversation]);
 
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
@@ -1045,26 +1116,10 @@ const Dashboard = () => {
                   }
                 }}
               />
-              <Tooltip title={user?.role === 'admin' ? "View All Messages" : "Message Admins"}>
+              <Tooltip title={user?.role === 'admin' ? "View All Messages" : "View Messages"}>
                 <IconButton
                   size="small"
-                  onClick={() => {
-                    if (user?.role === 'admin') {
-                      setMessagesDrawerOpen(true);
-                    } else {
-                      const messagingUsers = userStats.filter(u => u.role === 'admin');
-                      if (messagingUsers.length > 0) {
-                        setSelectedUser(messagingUsers[0]);
-                        setMessageDialogOpen(true);
-                      } else {
-                        setNotification({
-                          open: true,
-                          message: 'No admins available',
-                          severity: 'info'
-                        });
-                      }
-                    }
-                  }}
+                  onClick={() => setMessagesDrawerOpen(true)}
                   sx={{
                     color: '#2196f3',
                     '&:hover': {
@@ -1428,69 +1483,137 @@ const Dashboard = () => {
         onClose={handleCloseMessageDialog}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          sx: {
+            height: '80vh',
+            maxHeight: 600,
+            display: 'flex',
+            flexDirection: 'column'
+          }
+        }}
       >
-        <DialogTitle>
-          {selectedUser ? `Chat with ${selectedUser.username}` : 'Chat'}
+        <DialogTitle sx={{ 
+          px: 2, 
+          py: 1.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+              {selectedUser?.initials || selectedUser?.username?.charAt(0).toUpperCase()}
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {selectedUser?.username}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {selectedUser?.role === 'admin' ? 'Administrator' : 'User'}
+              </Typography>
+            </Box>
+          </Box>
           <IconButton
             aria-label="close"
             onClick={handleCloseMessageDialog}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: 8
-            }}
+            size="small"
           >
-            <CloseIcon />
+            <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: 2 }}>
           <Box
+            ref={messagesEndRef}
             sx={{
               height: 400,
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              gap: 1,
+              gap: 2,
               mb: 2
             }}
           >
-            {conversation.map((message) => (
-              <Box
-                key={message.id}
-                sx={{
-                  alignSelf: message.sender_id === user.id ? 'flex-end' : 'flex-start',
-                  backgroundColor: message.sender_id === user.id ? 'primary.main' : 'grey.200',
-                  color: message.sender_id === user.id ? 'white' : 'text.primary',
-                  borderRadius: 2,
-                  p: 1,
-                  maxWidth: '70%',
-                  position: 'relative'
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                  <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                    {message.sender_id === user.id ? 'You' : selectedUser?.username}
-                  </Typography>
-                </Box>
-                <Typography variant="body2">
-                  {message.content}
-                </Typography>
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    position: 'absolute',
-                    bottom: -18,
-                    right: message.sender_id === user.id ? 0 : 'auto',
-                    left: message.sender_id === user.id ? 'auto' : 0,
-                    color: 'text.secondary'
+            {conversation.map((message, index) => {
+              const isCurrentUser = message.sender_id === user.id;
+              const showAvatar = index === 0 || 
+                conversation[index - 1]?.sender_id !== message.sender_id;
+              
+              return (
+                <Box
+                  key={message.id}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: isCurrentUser ? 'row-reverse' : 'row',
+                    alignItems: 'flex-end',
+                    gap: 1,
+                    ml: isCurrentUser ? 'auto' : 0,
+                    mr: isCurrentUser ? 0 : 'auto',
+                    maxWidth: '80%'
                   }}
                 >
-                  {formatDate(message.created_at)}
-                </Typography>
-              </Box>
-            ))}
+                  {!isCurrentUser && showAvatar && (
+                    <Avatar 
+                      sx={{ 
+                        width: 28, 
+                        height: 28,
+                        bgcolor: 'primary.main',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      {selectedUser?.initials || selectedUser?.username?.charAt(0).toUpperCase()}
+                    </Avatar>
+                  )}
+                  <Box>
+                    <Box
+                      sx={{
+                        backgroundColor: isCurrentUser ? 'primary.main' : 'grey.100',
+                        color: isCurrentUser ? 'white' : 'text.primary',
+                        borderRadius: 2,
+                        p: 1.5,
+                        position: 'relative'
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {message.content}
+                      </Typography>
+                    </Box>
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        display: 'block',
+                        textAlign: isCurrentUser ? 'right' : 'left',
+                        mt: 0.5,
+                        color: 'text.secondary',
+                        fontSize: '0.75rem'
+                      }}
+                    >
+                      {formatDate(message.created_at)}
+                      {message.read_at && isCurrentUser && (
+                        <DoneAllIcon 
+                          sx={{ 
+                            ml: 0.5, 
+                            fontSize: '0.875rem',
+                            verticalAlign: 'middle',
+                            color: 'primary.main'
+                          }} 
+                        />
+                      )}
+                    </Typography>
+                  </Box>
+                </Box>
+              );
+            })}
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              gap: 1,
+              pt: 1,
+              borderTop: '1px solid',
+              borderColor: 'divider'
+            }}
+          >
             <TextField
               fullWidth
               variant="outlined"
@@ -1503,11 +1626,31 @@ const Dashboard = () => {
                   handleSendMessage();
                 }
               }}
+              multiline
+              maxRows={4}
+              size="small"
+              InputProps={{
+                sx: {
+                  borderRadius: 2,
+                  backgroundColor: 'grey.50'
+                }
+              }}
             />
             <IconButton 
               color="primary" 
               onClick={handleSendMessage}
               disabled={!messageInput.trim()}
+              sx={{
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'primary.dark'
+                },
+                '&.Mui-disabled': {
+                  bgcolor: 'grey.300',
+                  color: 'grey.500'
+                }
+              }}
             >
               <SendIcon />
             </IconButton>
@@ -1672,67 +1815,116 @@ const Dashboard = () => {
           ) : (
             // Users Tab
             <List sx={{ width: '100%' }}>
-              {userStats
-                .filter(u => 
-                  u.id !== user.id && // Don't show current user
-                  (u.username?.toLowerCase().includes(drawerSearchQuery.toLowerCase()) ||
-                   u.email?.toLowerCase().includes(drawerSearchQuery.toLowerCase()))
-                )
-                .map((u) => (
-                  <ListItem
-                    key={u.id}
-                    button
-                    onClick={() => {
-                      setSelectedUser(u);
-                      setMessageDialogOpen(true);
-                      setMessagesDrawerOpen(false);
-                    }}
-                    sx={{
-                      borderRadius: 1,
-                      mb: 1,
-                      '&:hover': {
-                        bgcolor: 'rgba(33, 150, 243, 0.08)'
-                      }
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        {u?.initials || u?.username?.charAt(0).toUpperCase() || '?'}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="subtitle2">
-                            {u?.username}
-                          </Typography>
-                          {u?.role === 'admin' && (
-                            <Chip
-                              size="small"
-                              label="Admin"
-                              color="primary"
-                              sx={{ height: 20 }}
+              {user.role === 'admin' ? (
+                // Admin view remains the same
+                userStats
+                  .filter(u => {
+                    const matchesSearch = u.username?.toLowerCase().includes(drawerSearchQuery.toLowerCase()) ||
+                                        u.email?.toLowerCase().includes(drawerSearchQuery.toLowerCase());
+                    return u.id !== user.id && matchesSearch;
+                  })
+                  .map((u) => (
+                    <ListItem
+                      key={u.id}
+                      button
+                      onClick={() => {
+                        setSelectedUser(u);
+                        setMessageDialogOpen(true);
+                        setMessagesDrawerOpen(false);
+                      }}
+                      sx={{
+                        borderRadius: 1,
+                        mb: 1,
+                        '&:hover': {
+                          bgcolor: 'rgba(33, 150, 243, 0.08)'
+                        }
+                      }}
+                    >
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>
+                          {u?.initials || u?.username?.charAt(0).toUpperCase() || '?'}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle2">
+                              {u?.username}
+                            </Typography>
+                            {u?.role === 'admin' && (
+                              <Chip
+                                size="small"
+                                label="Admin"
+                                color="primary"
+                                sx={{ height: 20 }}
+                              />
+                            )}
+                          </Box>
+                        }
+                        secondary={u?.email}
+                      />
+                    </ListItem>
+                  ))
+              ) : (
+                // Regular user view - show admins from the public endpoint
+                <Box>
+                  {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : (
+                    allConversations
+                      .filter(conv => {
+                        const admin = conv.sender_id === user.id ? conv.recipient : conv.sender;
+                        return admin.username?.toLowerCase().includes(drawerSearchQuery.toLowerCase()) ||
+                               admin.email?.toLowerCase().includes(drawerSearchQuery.toLowerCase());
+                      })
+                      .map(conv => {
+                        const admin = conv.sender_id === user.id ? conv.recipient : conv.sender;
+                        return (
+                          <ListItem
+                            key={admin.id}
+                            button
+                            onClick={() => {
+                              setSelectedUser(admin);
+                              setMessageDialogOpen(true);
+                              setMessagesDrawerOpen(false);
+                            }}
+                            sx={{
+                              borderRadius: 1,
+                              mb: 1,
+                              '&:hover': {
+                                bgcolor: 'rgba(33, 150, 243, 0.08)'
+                              }
+                            }}
+                          >
+                            <ListItemAvatar>
+                              <Avatar sx={{ bgcolor: 'primary.main' }}>
+                                {admin?.initials || admin?.username?.charAt(0).toUpperCase() || '?'}
+                              </Avatar>
+                            </ListItemAvatar>
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Typography variant="subtitle2">
+                                    {admin?.username}
+                                  </Typography>
+                                  <Chip
+                                    size="small"
+                                    label="Admin"
+                                    color="primary"
+                                    sx={{ height: 20 }}
+                                  />
+                                </Box>
+                              }
+                              secondary={admin?.email}
                             />
-                          )}
-                        </Box>
-                      }
-                      secondary={
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            maxWidth: '200px'
-                          }}
-                        >
-                          {u?.email}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
+                          </ListItem>
+                        );
+                      })
+                  )}
+                </Box>
+              )}
             </List>
           )}
         </Box>

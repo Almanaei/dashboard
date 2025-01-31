@@ -29,12 +29,16 @@ const canSendMessage = async (senderId, recipientId) => {
     User.findByPk(recipientId)
   ]);
 
+  if (!sender || !recipient) {
+    return false;
+  }
+
   // Admin can message anyone
   if (sender.role === 'admin') return true;
 
-  // Regular users can only message admins
-  if (sender.role === 'user') {
-    return recipient.role === 'admin';
+  // Regular users can message admins
+  if (sender.role === 'user' && recipient.role === 'admin') {
+    return true;
   }
 
   return false;
@@ -291,44 +295,64 @@ export const getConversation = async (req, res) => {
   }
 };
 
-// Get all conversations for current user
+// Get all conversations for a user
 export const getConversations = async (req, res) => {
   try {
-    const current_user_id = req.user.id;
+    const userId = req.user.id;
 
+    // Get the latest message from each conversation
     const conversations = await Message.findAll({
-      where: {
-        [Op.or]: [
-          { sender_id: current_user_id },
-          { recipient_id: current_user_id }
-        ],
-        deleted_at: null
-      },
+      attributes: [
+        'id',
+        'sender_id',
+        'recipient_id',
+        'content',
+        'read_at',
+        'edited_at',
+        'deleted_at',
+        'attachments',
+        'reactions',
+        'created_at',
+        'updated_at'
+      ],
       include: [
         {
           model: User,
           as: 'sender',
-          attributes: ['id', 'username', 'email', 'initials']
+          attributes: ['id', 'username', 'email', 'initials', 'role']
         },
         {
           model: User,
           as: 'recipient',
-          attributes: ['id', 'username', 'email', 'initials']
+          attributes: ['id', 'username', 'email', 'initials', 'role']
         }
       ],
+      where: {
+        deleted_at: null,
+        [Op.or]: [
+          { sender_id: userId },
+          { recipient_id: userId }
+        ]
+      },
       order: [['created_at', 'DESC']],
-      group: [
-        sequelize.literal(`CASE 
-          WHEN sender_id = ${current_user_id} THEN recipient_id 
-          ELSE sender_id 
-        END`)
-      ]
+      // Remove the group by clause since we want to show all messages
+      // and let the frontend handle grouping by conversation
     });
 
-    res.json(conversations);
+    // Process conversations to get unique conversations with latest message
+    const conversationMap = new Map();
+    conversations.forEach(message => {
+      const otherUserId = message.sender_id === userId ? message.recipient_id : message.sender_id;
+      if (!conversationMap.has(otherUserId) || message.created_at > conversationMap.get(otherUserId).created_at) {
+        conversationMap.set(otherUserId, message);
+      }
+    });
+
+    const uniqueConversations = Array.from(conversationMap.values());
+    res.json(uniqueConversations);
   } catch (error) {
     console.error('Error getting conversations:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to get conversations' });
   }
 };
 

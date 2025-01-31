@@ -1,11 +1,14 @@
 import express from 'express';
-import { sendMessage, getConversation, markAsRead, editMessage, deleteMessage, reactToMessage } from '../controllers/MessageController.js';
+import { sendMessage, getConversation, markAsRead, editMessage, deleteMessage, reactToMessage, getConversations } from '../controllers/MessageController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(verifyToken);
+
+// Get all conversations
+router.get('/list', getConversations);
 
 // Send a new message
 router.post('/', sendMessage);
