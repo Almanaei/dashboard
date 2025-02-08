@@ -349,6 +349,7 @@ router.post('/', upload.array('attachments'), async (req, res) => {
         console.log('Sending to bulkCreate:', {
           data: attachments,
           fields: [
+            'id',
             'report_id',
             'name',
             'filename',
@@ -365,6 +366,7 @@ router.post('/', upload.array('attachments'), async (req, res) => {
           validate: true,
           returning: true,
           fields: [
+            'id',
             'report_id',
             'name',
             'filename',
@@ -601,6 +603,7 @@ router.put('/:id', upload.array('attachments'), async (req, res) => {
         validate: true,
         returning: true,
         fields: [
+          'id',
           'report_id',
           'name',
           'filename',
@@ -724,130 +727,271 @@ router.get('/:id/pdf', async (req, res) => {
     // Pipe the PDF document to the response
     doc.pipe(res);
 
+    // Define colors and styles
+    const colors = {
+      primary: '#1976d2',
+      secondary: '#666666',
+      text: '#000000',
+      border: '#e0e0e0'
+    };
+
+    const fonts = {
+      title: 24,
+      subtitle: 20,
+      heading: 16,
+      normal: 12,
+      small: 10
+    };
+
     // Add header with logo and company name
-    doc
-      .fontSize(24)
-      .fillColor('#1976d2')
-      .text('Dashboard System', { align: 'center' })
-      .moveDown(0.5);
+    doc.fontSize(fonts.title)
+       .fillColor(colors.primary);
 
-    // Add a horizontal line
-    doc
-      .strokeColor('#e0e0e0')
-      .lineWidth(1)
-      .moveTo(50, doc.y)
-      .lineTo(545, doc.y)
-      .stroke()
-      .moveDown();
+    // Add company logo if exists (you can add your logo path here)
+    // const logoPath = path.join(process.cwd(), 'assets', 'logo.png');
+    // if (fs.existsSync(logoPath)) {
+    //   doc.image(logoPath, 50, 45, { width: 50 });
+    // }
 
-    // Add report title
-    doc
-      .fontSize(20)
-      .fillColor('#000000')
-      .text(report.title, { align: 'center' })
-      .moveDown();
+    // Add company name with better positioning
+    doc.text('Dashboard System', 50, 50, {
+      align: 'center',
+      width: doc.page.width - 100
+    });
 
-    // Add metadata section
-    doc
-      .fontSize(12)
-      .fillColor('#666666');
+    // Add decorative line under header
+    const headerLineY = 90;
+    doc.strokeColor(colors.primary)
+       .lineWidth(2)
+       .moveTo(50, headerLineY)
+       .lineTo(doc.page.width - 50, headerLineY)
+       .stroke();
 
-    // Create a table-like structure for metadata
-    const startX = 50;
-    const colWidth = 150;
-    const lineHeight = 20;
-    let currentY = doc.y;
+    // Add report title with better styling
+    doc.moveDown(2)
+       .fontSize(fonts.subtitle)
+       .fillColor(colors.text)
+       .font('Helvetica-Bold')
+       .text(report.title, {
+         align: 'center',
+         width: doc.page.width - 100
+       });
 
-    // Date info
-    doc
-      .text('Date:', startX, currentY)
-      .fillColor('#000000')
-      .text(new Date(report.date).toLocaleDateString(), startX + colWidth, currentY);
+    // Add metadata section with improved layout
+    doc.moveDown(1.5)
+       .fontSize(fonts.normal)
+       .font('Helvetica');
 
-    // Time info
-    currentY += lineHeight;
-    doc
-      .fillColor('#666666')
-      .text('Time:', startX, currentY)
-      .fillColor('#000000')
-      .text(new Date(report.time).toLocaleTimeString(), startX + colWidth, currentY);
+    // Create a better looking metadata table
+    const metadataY = doc.y + 10;
+    const colWidth = (doc.page.width - 100) / 2;
+    
+    // Draw metadata background
+    doc.rect(50, metadataY - 5, doc.page.width - 100, 80)
+       .fillColor('#f5f5f5')
+       .fill();
 
-    // Location info if available
-    if (report.address) {
-      currentY += lineHeight;
-      doc
-        .fillColor('#666666')
-        .text('Location:', startX, currentY)
-        .fillColor('#000000')
-        .text(report.address, startX + colWidth, currentY);
-    }
+    // Reset fill color for text
+    doc.fillColor(colors.text);
 
-    // Add some space before content
-    doc.moveDown(2);
+    // Add metadata content with better alignment
+    const metadataContent = [
+      { label: 'Date:', value: new Date(report.date).toLocaleDateString() },
+      { label: 'Time:', value: new Date(report.time).toLocaleTimeString() },
+      { label: 'Location:', value: report.address || 'N/A' }
+    ];
 
-    // Add content section
-    doc
-      .fontSize(14)
-      .fillColor('#1976d2')
-      .text('Report Content', { underline: true })
-      .moveDown()
-      .fontSize(12)
-      .fillColor('#000000')
-      .text(report.content, {
-        align: 'justify',
-        columns: 1
-      })
-      .moveDown(2);
+    metadataContent.forEach((item, index) => {
+      const yPosition = metadataY + (index * 25);
+      
+      // Label
+      doc.font('Helvetica-Bold')
+         .fontSize(fonts.normal)
+         .fillColor(colors.secondary)
+         .text(item.label, 70, yPosition);
+      
+      // Value
+      doc.font('Helvetica')
+         .fillColor(colors.text)
+         .text(item.value, 70 + 100, yPosition);
+    });
+
+    // Add content section with better formatting
+    doc.moveDown(5)
+       .fontSize(fonts.heading)
+       .font('Helvetica-Bold')
+       .fillColor(colors.primary)
+       .text('Report Content', 50);
+
+    // Add decorative line under content heading
+    const contentLineY = doc.y;
+    doc.strokeColor(colors.border)
+       .lineWidth(1)
+       .moveTo(50, contentLineY)
+       .lineTo(doc.page.width - 50, contentLineY)
+       .stroke();
+
+    // Add the actual content with better formatting
+    doc.moveDown(1)
+       .fontSize(fonts.normal)
+       .font('Helvetica')
+       .fillColor(colors.text)
+       .text(report.content, {
+         align: 'justify',
+         columns: 1,
+         width: doc.page.width - 100,
+         lineGap: 2
+       });
 
     // Add attachments section if there are any
     if (report.attachments && report.attachments.length > 0) {
-      doc
-        .fontSize(14)
-        .fillColor('#1976d2')
-        .text('Attachments', { underline: true })
-        .moveDown()
-        .fontSize(12)
-        .fillColor('#000000');
+      doc.moveDown(2)
+         .fontSize(fonts.heading)
+         .font('Helvetica-Bold')
+         .fillColor(colors.primary)
+         .text('Attachments');
 
-      report.attachments.forEach((attachment, index) => {
-        doc.text(`${index + 1}. ${attachment.filename}`, {
-          link: attachment.url,
-          underline: true
-        });
-      });
+      // Add decorative line under attachments heading
+      const attachmentLineY = doc.y;
+      doc.strokeColor(colors.border)
+         .lineWidth(1)
+         .moveTo(50, attachmentLineY)
+         .lineTo(doc.page.width - 50, attachmentLineY)
+         .stroke();
+
+      // List attachments with preview/content
+      doc.moveDown(1)
+         .fontSize(fonts.normal)
+         .font('Helvetica');
+
+      // Process each attachment
+      for (const attachment of report.attachments) {
+        try {
+          const filePath = path.join(process.cwd(), 'uploads', attachment.filename);
+          
+          // Check if file exists
+          if (!fs.existsSync(filePath)) {
+            console.warn(`File not found: ${filePath}`);
+            continue;
+          }
+
+          // Add attachment title
+          doc.font('Helvetica-Bold')
+             .fillColor(colors.text)
+             .text(attachment.original_name || attachment.name)
+             .moveDown(0.5);
+
+          // Add file info
+          doc.font('Helvetica')
+             .fontSize(fonts.small)
+             .fillColor(colors.secondary)
+             .text(`Type: ${attachment.mime_type || 'Unknown'}`)
+             .text(`Size: ${formatFileSize(attachment.size)}`)
+             .moveDown(0.5);
+
+          // Handle different file types
+          if (attachment.mime_type?.startsWith('image/')) {
+            // For images, add the actual image
+            try {
+              const imgWidth = doc.page.width - 150; // Leave margins
+              doc.image(filePath, {
+                fit: [imgWidth, 300],
+                align: 'center'
+              });
+              doc.moveDown(1);
+            } catch (imgError) {
+              console.error('Error adding image:', imgError);
+              doc.fillColor(colors.secondary)
+                 .text('(Image preview not available)')
+                 .moveDown(1);
+            }
+          } else if (attachment.mime_type === 'application/pdf') {
+            // For PDFs, add a preview message
+            doc.fillColor(colors.secondary)
+               .text('PDF Document - Content not previewed in this report')
+               .moveDown(1);
+          } else if (attachment.mime_type?.includes('text/')) {
+            // For text files, add the content
+            try {
+              const content = fs.readFileSync(filePath, 'utf8');
+              const truncatedContent = content.length > 1000 
+                ? content.substring(0, 1000) + '...' 
+                : content;
+              
+              doc.font('Courier')
+                 .fontSize(fonts.small)
+                 .fillColor(colors.text)
+                 .text(truncatedContent, {
+                   width: doc.page.width - 100,
+                   align: 'left'
+                 })
+                 .moveDown(1);
+            } catch (textError) {
+              console.error('Error reading text file:', textError);
+              doc.fillColor(colors.secondary)
+                 .text('(Text content not available)')
+                 .moveDown(1);
+            }
+          } else {
+            // For other types, add an icon and basic info
+            const fileTypeIcon = getFileTypeIcon(attachment.mime_type);
+            doc.fillColor(colors.secondary)
+               .text(`${fileTypeIcon} Document content not previewed`)
+               .moveDown(1);
+          }
+
+          // Add separator between attachments
+          doc.strokeColor(colors.border)
+             .lineWidth(0.5)
+             .moveTo(70, doc.y)
+             .lineTo(doc.page.width - 70, doc.y)
+             .stroke()
+             .moveDown(1);
+
+        } catch (attachError) {
+          console.error(`Error processing attachment ${attachment.filename}:`, attachError);
+          doc.fillColor(colors.secondary)
+             .text('(Attachment processing error)')
+             .moveDown(1);
+        }
+      }
     }
 
     // Get total pages before adding the footer
     const totalPages = doc.bufferedPageRange().count;
 
-    // Add footer to all pages
-    let pageNumber = 1;
+    // Add enhanced footer to all pages
     for (let i = 0; i < totalPages; i++) {
       doc.switchToPage(i);
       
-      const bottomY = doc.page.height - 50;
+      const footerY = doc.page.height - 70;
       
-      // Add generation timestamp
-      doc
-        .fontSize(10)
-        .fillColor('#666666')
-        .text(
-          `Generated on ${new Date().toLocaleString()}`,
-          50,
-          bottomY,
-          { align: 'center' }
-        );
+      // Add footer line
+      doc.strokeColor(colors.border)
+         .lineWidth(1)
+         .moveTo(50, footerY)
+         .lineTo(doc.page.width - 50, footerY)
+         .stroke();
 
-      // Add page numbers
-      doc
-        .text(
-          `Page ${pageNumber} of ${totalPages}`,
-          50,
-          bottomY - 20,
-          { align: 'center' }
-        );
-      
-      pageNumber++;
+      // Add generation timestamp
+      doc.fontSize(fonts.small)
+         .fillColor(colors.secondary)
+         .text(
+           `Generated on ${new Date().toLocaleString()}`,
+           50,
+           footerY + 10,
+           { align: 'center', width: doc.page.width - 100 }
+         );
+
+      // Add page numbers with better styling
+      doc.fontSize(fonts.small)
+         .fillColor(colors.secondary)
+         .text(
+           `Page ${i + 1} of ${totalPages}`,
+           50,
+           footerY + 25,
+           { align: 'center', width: doc.page.width - 100 }
+         );
     }
 
     // Finalize the PDF
@@ -859,5 +1003,27 @@ router.get('/:id/pdf', async (req, res) => {
     }
   }
 });
+
+// Helper function to format file size
+function formatFileSize(bytes) {
+  if (!bytes) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+// Helper function to get file type icon
+function getFileTypeIcon(mimeType) {
+  if (!mimeType) return '📄';
+  if (mimeType.startsWith('image/')) return '📷';
+  if (mimeType === 'application/pdf') return '📕';
+  if (mimeType.includes('word')) return '📝';
+  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
+  if (mimeType.includes('presentation')) return '📺';
+  if (mimeType.includes('text/')) return '📃';
+  if (mimeType.includes('zip') || mimeType.includes('compressed')) return '📦';
+  return '📄';
+}
 
 export default router;

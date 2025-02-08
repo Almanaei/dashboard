@@ -267,12 +267,12 @@ export const getDashboardStats = async (req, res) => {
 
     console.log('Getting stats for user:', { userId, isAdmin });
 
-    // Get projects count
+    // Get projects count with proper where clause
     const projectCount = await Project.count({
       where: isAdmin ? {} : { created_by: userId }
     });
 
-    // Get reports count
+    // Get reports count with proper where clause
     const reportCount = await Report.count({
       where: isAdmin ? {} : { user_id: userId }
     });
@@ -285,11 +285,16 @@ export const getDashboardStats = async (req, res) => {
     res.json({
       projectCount,
       reportCount,
-      userCount
+      userCount,
+      success: true
     });
   } catch (error) {
     console.error('Error getting dashboard stats:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: 'Failed to fetch dashboard statistics',
+      details: error.message,
+      success: false
+    });
   }
 };
 
@@ -308,13 +313,15 @@ export const getUserStats = async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
     }
 
-    // Get query parameters
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    // Get query parameters with defaults
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
     const sortField = req.query.sortField || 'username';
-    const sortOrder = req.query.sortOrder || 'asc';
+    const sortOrder = (req.query.sortOrder || 'asc').toUpperCase();
+
+    console.log('Query parameters:', { page, limit, offset, search, sortField, sortOrder });
 
     // Build where clause
     const whereClause = {};
@@ -335,13 +342,20 @@ export const getUserStats = async (req, res) => {
         'username',
         'email',
         'initials',
-        'last_login'
+        'role',
+        'status',
+        'last_login',
+        'created_at',
+        'updated_at'
       ],
       where: whereClause,
       order: [
         [
-          sortField === 'lastActive' ? 'last_login' : sortField,
-          sortOrder.toUpperCase()
+          sortField === 'lastActive' ? 'last_login' : 
+          sortField === 'createdAt' ? 'created_at' :
+          sortField === 'updatedAt' ? 'updated_at' :
+          sortField,
+          sortOrder
         ]
       ],
       limit,
@@ -388,24 +402,18 @@ export const getUserStats = async (req, res) => {
         username: plainUser.username,
         email: plainUser.email,
         initials: plainUser.initials,
+        role: plainUser.role,
+        status: plainUser.status,
         last_login: plainUser.last_login,
+        created_at: plainUser.created_at,
+        updated_at: plainUser.updated_at,
         projectCount: projectCountMap.get(plainUser.id) || 0,
         reportCount: reportCountMap.get(plainUser.id) || 0
       };
     });
 
-    // Sort by counts if needed
-    if (sortField === 'projectCount' || sortField === 'reportCount') {
-      formattedStats.sort((a, b) => {
-        const aValue = a[sortField];
-        const bValue = b[sortField];
-        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
-      });
-    }
-
     console.log(`Found ${formattedStats.length} users with statistics`);
 
-    // Return pagination metadata along with the data
     res.json({
       users: formattedStats,
       pagination: {
@@ -413,11 +421,15 @@ export const getUserStats = async (req, res) => {
         page,
         limit,
         totalPages: Math.ceil(totalUsers / limit)
-      }
+      },
+      success: true
     });
   } catch (error) {
     console.error('Error getting user statistics:', error);
-    console.error('Error details:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: 'Failed to fetch user statistics',
+      details: error.message,
+      success: false
+    });
   }
 };

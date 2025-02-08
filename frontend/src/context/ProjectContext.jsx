@@ -201,16 +201,17 @@ export const ProjectProvider = ({ children }) => {
   }, [navigate, refreshProjects]);
 
   // Update project
-  const handleUpdateProject = useCallback(async (projectData) => {
+  const handleUpdateProject = useCallback(async (id, projectData) => {
     try {
-      const updatedProject = await updateProject(projectData.id, projectData);
+      console.log('Updating project:', { id, projectData });
+      const updatedProject = await updateProject(id, projectData);
       await refreshProjects(); // Refresh all projects after update
-      navigate('/projects');
+      return updatedProject;
     } catch (error) {
       console.error('Error updating project:', error);
       throw error;
     }
-  }, [navigate, refreshProjects]);
+  }, [refreshProjects]);
 
   // Delete project
   const handleDeleteProject = useCallback(async (id) => {

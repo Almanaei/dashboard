@@ -13,18 +13,15 @@ import {
   Select,
   Slider,
   Snackbar,
-  Alert
+  Alert,
+  InputAdornment
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { useLanguage } from '../context/LanguageContext';
 import { useProjects } from '../context/ProjectContext';
-
-// Configure date adapter locale and format
-const dateConfig = {
-  format: 'MMM dd, yyyy'
-};
+import { enUS } from 'date-fns/locale';
 
 const EditProject = () => {
   const navigate = useNavigate();
@@ -38,7 +35,8 @@ const EditProject = () => {
     priority: '',
     start_date: null,
     end_date: null,
-    progress: 0
+    progress: 0,
+    budget: ''
   });
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -96,16 +94,11 @@ const EditProject = () => {
     try {
       // Create a new date object at noon UTC
       const date = new Date(newDate);
-      const utcDate = new Date(Date.UTC(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate(),
-        12, 0, 0, 0
-      ));
-
+      date.setHours(12, 0, 0, 0);
+      
       setProject(prev => ({
         ...prev,
-        [field]: utcDate.toISOString()
+        [field]: date.toISOString()
       }));
     } catch (error) {
       console.error('Error processing date:', error);
@@ -119,12 +112,37 @@ const EditProject = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Project data already has dates in ISO string format
+      // Validate project name
+      const name = project.name?.trim();
+      if (!name || name.length < 3 || name.length > 100) {
+        throw new Error('Project name must be between 3 and 100 characters');
+      }
+      if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
+        throw new Error('Project name can only contain letters, numbers, spaces, hyphens, and underscores');
+      }
+
+      // Format the project data
       const updatedProject = {
-        ...project
+        name,
+        description: project.description?.trim() || '',
+        status: project.status || 'planning',
+        priority: project.priority || 'medium',
+        start_date: project.start_date ? new Date(project.start_date).toISOString() : null,
+        end_date: project.end_date ? new Date(project.end_date).toISOString() : null,
+        budget: project.budget ? parseFloat(project.budget) : null,
+        progress: parseInt(project.progress || 0)
       };
+
+      // Validate dates
+      if (updatedProject.start_date && updatedProject.end_date) {
+        const startDate = new Date(updatedProject.start_date);
+        const endDate = new Date(updatedProject.end_date);
+        if (endDate < startDate) {
+          throw new Error('End date must be after start date');
+        }
+      }
       
-      console.log('Updating project with data:', updatedProject);
+      console.log('Updating project with data:', { id, updatedProject });
       await updateProject(id, updatedProject);
       setSnackbar({
         open: true,
@@ -162,7 +180,13 @@ const EditProject = () => {
         <form onSubmit={handleSubmit}>
           <LocalizationProvider 
             dateAdapter={AdapterDateFns}
-            adapterLocale="en-US"
+            adapterLocale={enUS}
+            dateFormats={{
+              keyboardDate: 'MM/dd/yyyy',
+              shortDate: 'MMM d, yyyy',
+              normalDate: 'MMM d, yyyy',
+              fullDate: 'MMM d, yyyy'
+            }}
           >
             <Grid container spacing={3}>
               <Grid item xs={12}>
@@ -262,6 +286,19 @@ const EditProject = () => {
                   marks
                   min={0}
                   max={100}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label={t('budget')}
+                  type="number"
+                  value={project.budget}
+                  onChange={handleChange('budget')}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                  }}
+                  required
                 />
               </Grid>
               <Grid item xs={12} sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>

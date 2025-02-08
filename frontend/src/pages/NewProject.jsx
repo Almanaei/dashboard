@@ -82,16 +82,11 @@ const NewProject = () => {
     try {
       // Create a new date object at noon UTC
       const date = new Date(newDate);
-      const utcDate = new Date(Date.UTC(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate(),
-        12, 0, 0, 0
-      ));
-
+      date.setHours(12, 0, 0, 0);
+      
       setProject(prev => ({
         ...prev,
-        [field]: utcDate.toISOString()
+        [field]: date.toISOString()
       }));
     } catch (error) {
       console.error('Error processing date:', error);
@@ -107,17 +102,15 @@ const NewProject = () => {
     try {
       // Format the project data
       const newProject = {
-        ...project,
-        budget: project.budget ? parseFloat(project.budget) : undefined,
-        // No need for additional date formatting since we're already storing ISO strings
+        name: project.name,
+        description: project.description || '',
+        status: project.status || 'planning',
+        priority: project.priority || 'medium',
+        start_date: project.start_date,
+        end_date: project.end_date,
+        budget: project.budget ? parseFloat(project.budget) : null,
+        progress: project.progress || 0
       };
-      
-      // Remove empty fields
-      Object.keys(newProject).forEach(key => {
-        if (newProject[key] === undefined || newProject[key] === '') {
-          delete newProject[key];
-        }
-      });
 
       console.log('Creating project with data:', newProject);
       await createProject(newProject);

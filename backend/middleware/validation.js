@@ -16,10 +16,8 @@ export const projectValidation = {
       .trim()
       .notEmpty()
       .withMessage('Project name is required')
-      .isLength({ min: 3, max: 100 })
-      .withMessage('Project name must be between 3 and 100 characters')
-      .matches(/^[a-zA-Z0-9\s\-_]+$/)
-      .withMessage('Project name can only contain letters, numbers, spaces, hyphens, and underscores'),
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Project name must be between 1 and 100 characters'),
     body('description')
       .optional()
       .trim()
@@ -36,13 +34,7 @@ export const projectValidation = {
     body('start_date')
       .optional()
       .isISO8601()
-      .withMessage('Invalid start date format')
-      .custom(date => {
-        if (date && new Date(date) < new Date()) {
-          throw new Error('Start date cannot be in the past');
-        }
-        return true;
-      }),
+      .withMessage('Invalid start date format'),
     body('end_date')
       .optional()
       .isISO8601()
@@ -54,24 +46,23 @@ export const projectValidation = {
           if (end < start) {
             throw new Error('End date must be after start date');
           }
-          // Validate project duration is not more than 5 years
-          const fiveYears = 5 * 365 * 24 * 60 * 60 * 1000;
-          if (end - start > fiveYears) {
-            throw new Error('Project duration cannot exceed 5 years');
-          }
         }
         return true;
       }),
     body('budget')
       .optional()
-      .isFloat({ min: 0, max: 1000000000 })
-      .withMessage('Budget must be between 0 and 1,000,000,000')
+      .isFloat({ min: 0 })
+      .withMessage('Budget must be a positive number')
       .custom((value) => {
         if (value && !Number.isInteger(value * 100)) {
           throw new Error('Budget can have at most 2 decimal places');
         }
         return true;
       }),
+    body('progress')
+      .optional()
+      .isInt({ min: 0, max: 100 })
+      .withMessage('Progress must be between 0 and 100'),
     body('tags')
       .optional()
       .isArray()
@@ -126,10 +117,6 @@ export const projectValidation = {
           const end = new Date(endDate);
           if (end < start) {
             throw new Error('End date must be after start date');
-          }
-          const fiveYears = 5 * 365 * 24 * 60 * 60 * 1000;
-          if (end - start > fiveYears) {
-            throw new Error('Project duration cannot exceed 5 years');
           }
         }
         return true;

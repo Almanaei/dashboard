@@ -14,7 +14,8 @@ ReportAttachment.init({
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
-    primaryKey: true
+    primaryKey: true,
+    allowNull: false
   },
   report_id: {
     type: DataTypes.UUID,
@@ -42,11 +43,11 @@ ReportAttachment.init({
   },
   size: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
   },
   type: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true
   },
   url: {
     type: DataTypes.STRING,

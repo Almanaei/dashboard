@@ -121,15 +121,21 @@ router.get('/:id', projectValidation.delete, async (req, res) => {
 // Create new project
 router.post('/', projectValidation.create, async (req, res) => {
   try {
+    console.log('Creating project with data:', req.body);
+    console.log('User:', req.user);
+
     const projectData = {
       ...req.body,
-      created_by: req.user.id,
+      created_by: req.user.id, // Ensure created_by is set from the authenticated user
       // Ensure dates are properly formatted
       start_date: req.body.start_date ? new Date(req.body.start_date) : null,
       end_date: req.body.end_date ? new Date(req.body.end_date) : null
     };
 
+    console.log('Formatted project data:', projectData);
     const project = await Project.create(projectData);
+    
+    // Fetch the created project with user data
     const createdProject = await Project.findByPk(project.id, {
       include: [{
         model: User,
@@ -150,7 +156,11 @@ router.post('/', projectValidation.create, async (req, res) => {
     res.status(201).json(formattedProject);
   } catch (error) {
     console.error('Error creating project:', error);
-    res.status(500).json({ message: 'Failed to create project', error: error.message });
+    res.status(500).json({ 
+      message: 'Failed to create project', 
+      error: error.message,
+      details: error.errors?.map(e => e.message)
+    });
   }
 });
 

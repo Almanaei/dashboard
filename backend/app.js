@@ -28,7 +28,7 @@ const httpServer = createServer(app);
 // Initialize Socket.IO
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3005", "http://localhost:5173"],
+    origin: ['http://localhost:3005', process.env.FRONTEND_URL],
     methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["Authorization", "Content-Type"]
@@ -95,7 +95,7 @@ app.use((req, res, next) => {
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3005'],
+  origin: ['http://localhost:3005', process.env.FRONTEND_URL],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -147,17 +147,25 @@ app.use((err, req, res, next) => {
 
 // Start server
 const startServer = async () => {
-  try {
-    const port = process.env.PORT || 5005;
-    httpServer.listen(port, () => {
-      console.log(`Server is running on port ${port}`);
+  const port = process.env.PORT || 5005;
+  
+  const tryPort = (portToTry) => {
+    httpServer.listen(portToTry, () => {
+      console.log(`Server is running on port ${portToTry}`);
       console.log(`Socket.IO server is ready at path: /socket.io/`);
       console.log('Socket.IO configuration:', io._opts);
+    }).on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`Port ${portToTry} is busy, trying ${portToTry + 1}...`);
+        tryPort(portToTry + 1);
+      } else {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+      }
     });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
+  };
+
+  tryPort(port);
 };
 
 startServer();

@@ -99,6 +99,8 @@ import {
   markAsRead,
   addReaction
 } from '../services/messageService';
+import { getDashboardStats, getProjectTrends, getUserStats } from '../services/statisticsService';
+import { getProjects } from '../services/projectService';
 
 ChartJS.register(
   CategoryScale,
@@ -248,7 +250,8 @@ const Dashboard = () => {
   });
   const { t, isRTL } = useLanguage();
   const { token, user } = useAuth();
-  const API_URL = 'http://localhost:5005';
+  const API_URL = import.meta.env.VITE_API_URL;
+  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
   const navigate = useNavigate();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -348,38 +351,16 @@ const Dashboard = () => {
           setStartDate(periodStartDate);
         }
 
-        // Fetch statistics
-        const statsResponse = await fetch(`${API_URL}/api/statistics/dashboard`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (!statsResponse.ok) {
-          throw new Error('Failed to fetch statistics');
-        }
-        
-        const statsData = await statsResponse.json();
-        setStatistics({
-          projects: statsData.projectCount || 0,
-          reports: statsData.reportCount || 0,
-          users: statsData.userCount || 0
-        });
+        // Fetch statistics using the service
+        const statsData = await getDashboardStats();
+        setStatistics(statsData);
 
-        // Fetch trends data with date range
-        const trendsResponse = await fetch(
-          `${API_URL}/api/statistics/projects/trends?` + new URLSearchParams({
-            period: selectedPeriod,
-            start_date: format(periodStartDate, 'yyyy-MM-dd'),
-            end_date: format(endDate || new Date(), 'yyyy-MM-dd')
-          }), {
-            headers: { Authorization: `Bearer ${token}` }
-          }
+        // Fetch trends data with date range using the service
+        const trendsData = await getProjectTrends(
+          selectedPeriod,
+          format(periodStartDate, 'yyyy-MM-dd'),
+          format(endDate || new Date(), 'yyyy-MM-dd')
         );
-
-        if (!trendsResponse.ok) {
-          throw new Error('Failed to fetch trends');
-        }
-
-        const trendsData = await trendsResponse.json();
 
         // Generate date labels based on period
         const dateFormat = selectedPeriod === 'D' ? 'MMM dd' : selectedPeriod === 'M' ? 'MMM yyyy' : 'yyyy';
@@ -391,63 +372,32 @@ const Dashboard = () => {
         const reportData = new Array(labels.length).fill(0);
 
         // Fill in the actual data
-        trendsData.forEach(item => {
-          const itemDate = new Date(item.date);
-          const formattedDate = format(itemDate, dateFormat);
-          const index = labels.findIndex(label => label === formattedDate);
-          
+        trendsData.forEach(trend => {
+          const date = new Date(trend.date);
+          const index = dates.findIndex(d => 
+            format(d, dateFormat) === format(date, dateFormat)
+          );
           if (index !== -1) {
-            projectData[index] = item.projectCount || 0;
-            reportData[index] = item.reportCount || 0;
+            projectData[index] = trend.projectCount;
+            reportData[index] = trend.reportCount;
           }
         });
 
-        // Find max value for y-axis
-        const maxValue = Math.max(
-          ...projectData,
-          ...reportData,
-          1  // Ensure we always have a non-zero max value
-        );
-
-        // Calculate appropriate step size and max value
-        const stepSize = Math.max(1, Math.ceil(maxValue / 5));
-        const maxAxisValue = Math.ceil(maxValue / stepSize) * stepSize;
-
-        // Update chart options with new max value and step size
-        setChartOptions(prev => ({
-          ...prev,
-          scales: {
-            ...prev.scales,
-            y: {
-              ...prev.scales.y,
-              beginAtZero: true,
-              max: maxAxisValue,
-              ticks: {
-                ...prev.scales.y.ticks,
-                stepSize: stepSize
-              }
-            }
-          }
-        }));
-
-        // Set chart data
         setChartData({
           labels,
           datasets: [
             {
               label: 'Projects',
               data: projectData,
-              borderColor: '#2196F3',
-              backgroundColor: 'rgba(33, 150, 243, 0.1)',
-              fill: true,
+              borderColor: 'rgb(75, 192, 192)',
+              backgroundColor: 'rgba(75, 192, 192, 0.5)',
               tension: 0.4
             },
             {
               label: 'Reports',
               data: reportData,
-              borderColor: '#4CAF50',
-              backgroundColor: 'rgba(76, 175, 80, 0.1)',
-              fill: true,
+              borderColor: 'rgb(255, 99, 132)',
+              backgroundColor: 'rgba(255, 99, 132, 0.5)',
               tension: 0.4
             }
           ]
@@ -460,47 +410,18 @@ const Dashboard = () => {
       }
     };
 
-    fetchData();
-  }, [API_URL, token, selectedPeriod, startDate, endDate]);
+    if (token) {
+      fetchData();
+    }
+  }, [token, selectedPeriod, startDate, endDate]);
 
   // Fetch projects with updated date handling
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/projects`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch projects');
-        }
-        
-        const data = await response.json();
-        
-        // Process the dates before setting to state
-        const processedProjects = data.map(project => {
-          try {
-            return {
-              ...project,
-              // Convert dates to ISO strings if they exist and are valid
-              start_date: project.start_date ? new Date(project.start_date).toISOString() : null,
-              end_date: project.end_date ? new Date(project.end_date).toISOString() : null
-            };
-          } catch (error) {
-            console.error('Error processing dates for project:', project.id, error);
-            return {
-              ...project,
-              start_date: null,
-              end_date: null
-            };
-          }
-        });
-        
-        console.log('Processed projects:', processedProjects);
-        setUserStats(processedProjects);
+        setLoading(true);
+        const projects = await getProjects(searchQuery);
+        setUserStats(projects);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching projects:', error);
@@ -509,40 +430,20 @@ const Dashboard = () => {
       }
     };
 
-    fetchProjects();
-  }, [API_URL, token]);
+    if (token) {
+      fetchProjects();
+    }
+  }, [token, searchQuery]);
 
   // Update the fetchUserStats function
   useEffect(() => {
-    const fetchUserStats = async () => {
+    const fetchUserStatsData = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const queryParams = new URLSearchParams({
-          page: page + 1,
-          limit: rowsPerPage,
-          search: searchQuery,
-          sortField,
-          sortOrder
-        });
+        const data = await getUserStats(page + 1, rowsPerPage, searchQuery, sortField, sortOrder);
         
-        const response = await fetch(
-          `${API_URL}/api/statistics/users?${queryParams}`,
-          {
-            headers: { 
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch user statistics');
-        }
-
         if (data.users && Array.isArray(data.users)) {
           setUserStats(data.users);
           setTotalUsers(data.pagination.total);
@@ -558,9 +459,9 @@ const Dashboard = () => {
     };
 
     if (token) {
-      fetchUserStats();
+      fetchUserStatsData();
     }
-  }, [token, API_URL, page, rowsPerPage, searchQuery, sortField, sortOrder]);
+  }, [token, page, rowsPerPage, searchQuery, sortField, sortOrder]);
 
   // Add pagination handlers
   const handleChangePage = (event, newPage) => {
@@ -771,7 +672,7 @@ const Dashboard = () => {
   // Add socket initialization in useEffect
   useEffect(() => {
     if (token) {
-      const newSocket = io(API_URL, {
+      const newSocket = io(SOCKET_URL, {
         path: '/socket.io/',
         auth: { token },
         transports: ['websocket', 'polling'],
@@ -785,6 +686,8 @@ const Dashboard = () => {
 
       newSocket.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
+        // Add error handling for socket connection
+        setError('Failed to connect to real-time updates. Please refresh the page.');
       });
 
       newSocket.on('new_message', (message) => {
@@ -812,10 +715,12 @@ const Dashboard = () => {
       setSocket(newSocket);
 
       return () => {
-        newSocket.disconnect();
+        if (newSocket) {
+          newSocket.disconnect();
+        }
       };
     }
-  }, [token, API_URL, selectedUser]);
+  }, [token]);
 
   // Update handleSendMessage to use socket
   const handleSendMessage = async () => {
