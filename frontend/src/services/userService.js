@@ -74,11 +74,30 @@ export const getUsers = async (search = '') => {
       ...getAuthHeaders()
     });
     
-    // Ensure we return an object with a users array
-    const data = response.data;
-    return {
-      users: Array.isArray(data) ? data : (data.users || [])
-    };
+    // Process the response
+    const rawUsers = response.data?.users || response.data || [];
+    console.log('Raw users response:', rawUsers);
+    
+    const users = Array.isArray(rawUsers) ? rawUsers : [];
+    return users.map(user => {
+      // Ensure last_login is properly formatted
+      let last_login = null;
+      if (user.last_login) {
+        try {
+          const date = new Date(user.last_login);
+          if (!isNaN(date.getTime())) {
+            last_login = date.toISOString();
+          }
+        } catch (e) {
+          console.error('Error parsing last_login for user:', user.id, e);
+        }
+      }
+      
+      return {
+        ...user,
+        last_login
+      };
+    });
   } catch (error) {
     console.error('Error fetching users:', error.response?.data || error);
     throw error;
@@ -87,7 +106,7 @@ export const getUsers = async (search = '') => {
 
 export const getUserCount = async () => {
   try {
-    const response = await axios.get(`${API_URL}/count`, getAuthHeaders());
+    const response = await axios.get(`${API_URL}/statistics/users/count`, getAuthHeaders());
     return response.data.count;
   } catch (error) {
     console.error('Error getting user count:', error.response?.data || error);
