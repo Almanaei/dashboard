@@ -445,43 +445,6 @@ const Dashboard = () => {
     }
   }, [token, selectedPeriod, startDate, endDate]);
 
-  // Fetch projects with updated date handling
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        setLoading(true);
-        const response = await getProjects(searchQuery);
-        
-        // Update user stats with project data
-        if (response && Array.isArray(response)) {
-          const projectsByUser = response.reduce((acc, project) => {
-            if (!acc[project.created_by]) {
-              acc[project.created_by] = {
-                projectCount: 0,
-                reportCount: 0,
-                ...project.creator
-              };
-            }
-            acc[project.created_by].projectCount++;
-            return acc;
-          }, {});
-          
-          setUserStats(Object.values(projectsByUser));
-        }
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching projects:', error);
-        setError(error.message);
-        setLoading(false);
-      }
-    };
-
-    if (token) {
-      fetchProjects();
-    }
-  }, [token, searchQuery]);
-
   // Update the fetchUserStats function
   useEffect(() => {
     const fetchUserStatsData = async () => {
@@ -489,22 +452,47 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         
-        const data = await getUserStats();
+        // Fetch user statistics with project and report counts
+        const response = await getUserStats();
         
-        if (data && data.summary) {
-          setStatistics(prev => ({
-            ...prev,
-            users: data.summary.total_users || 0,
-            activeUsers: data.summary.active_users || 0,
-            inactiveUsers: data.summary.inactive_users || 0,
-            adminCount: data.summary.admin_count || 0,
-            userCount: data.summary.user_count || 0,
-            activeLast24h: data.summary.active_last_24h || 0,
-            activeLast7d: data.summary.active_last_7d || 0,
-            activeLast30d: data.summary.active_last_30d || 0
+        if (response && response.users) {
+          // Map the users data with their statistics
+          const formattedUsers = response.users.map(user => ({
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            initials: user.initials || user.username?.charAt(0).toUpperCase(),
+            role: user.role,
+            status: user.status,
+            last_login: user.last_login,
+            projectCount: user.projectCount || 0,
+            reportCount: user.reportCount || 0
           }));
-          setUserStats(data.recentUsers || []);
-          setTotalUsers(data.summary.total_users || 0);
+
+          // Sort users by most recently active
+          const sortedUsers = formattedUsers.sort((a, b) => {
+            if (!a.last_login) return 1;
+            if (!b.last_login) return -1;
+            return new Date(b.last_login) - new Date(a.last_login);
+          });
+
+          setUserStats(sortedUsers);
+          setTotalUsers(response.pagination?.total || sortedUsers.length);
+
+          // Update statistics summary
+          if (response.summary) {
+            setStatistics(prev => ({
+              ...prev,
+              users: response.summary.total_users || 0,
+              activeUsers: response.summary.active_users || 0,
+              inactiveUsers: response.summary.inactive_users || 0,
+              adminCount: response.summary.admin_count || 0,
+              userCount: response.summary.user_count || 0,
+              activeLast24h: response.summary.active_last_24h || 0,
+              activeLast7d: response.summary.active_last_7d || 0,
+              activeLast30d: response.summary.active_last_30d || 0
+            }));
+          }
         } else {
           throw new Error('Invalid data format received');
         }
@@ -519,7 +507,7 @@ const Dashboard = () => {
     if (token) {
       fetchUserStatsData();
     }
-  }, [token]);
+  }, [token, page, rowsPerPage, sortField, sortOrder, filterStatus, searchQuery]);
 
   // Add pagination handlers
   const handleChangePage = (event, newPage) => {
@@ -1699,6 +1687,37 @@ const Dashboard = () => {
               sx={{ width: 200 }}
             />
 
+            {/* Filter Button */}
+            <Tooltip title={t('Filter')}>
+              <IconButton onClick={handleFilterClick}>
+                <FilterIcon />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={filterAnchorEl}
+              open={Boolean(filterAnchorEl)}
+              onClose={handleFilterClose}
+            >
+              <MenuItem onClick={() => {
+                setFilterStatus('all');
+                handleFilterClose();
+              }}>
+                {t('All Users')}
+              </MenuItem>
+              <MenuItem onClick={() => {
+                setFilterStatus('active');
+                handleFilterClose();
+              }}>
+                {t('Active Users')}
+              </MenuItem>
+              <MenuItem onClick={() => {
+                setFilterStatus('inactive');
+                handleFilterClose();
+              }}>
+                {t('Inactive Users')}
+              </MenuItem>
+            </Menu>
+
             {/* Sort Button */}
             <Tooltip title={t('Sort')}>
               <IconButton onClick={handleSortClick}>
@@ -1719,8 +1738,8 @@ const Dashboard = () => {
               <MenuItem onClick={() => handleSort('reportCount')}>
                 {t('Reports')} {sortField === 'reportCount' && (sortOrder === 'asc' ? '↑' : '↓')}
               </MenuItem>
-              <MenuItem onClick={() => handleSort('lastActive')}>
-                {t('Last Active')} {sortField === 'lastActive' && (sortOrder === 'asc' ? '↑' : '↓')}
+              <MenuItem onClick={() => handleSort('last_login')}>
+                {t('Last Active')} {sortField === 'last_login' && (sortOrder === 'asc' ? '↑' : '↓')}
               </MenuItem>
             </Menu>
 
@@ -1767,20 +1786,15 @@ const Dashboard = () => {
                 </TableRow>
               ) : (
                 userStats.map((user) => (
-                  <TableRow key={user?.id || 'unknown'}>
+                  <TableRow key={user.id}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ bgcolor: 'primary.main' }}>
-                          {user?.initials || (user?.username && user.username.charAt(0).toUpperCase()) || '?'}
+                          {user.initials || user.username?.charAt(0).toUpperCase()}
                         </Avatar>
                         <Box>
-                          <Typography 
-                            variant="subtitle2" 
-                            sx={{ 
-                              cursor: 'default'
-                            }}
-                          >
-                            {user?.username}
+                          <Typography variant="subtitle2">
+                            {user.username}
                             {user.role === 'admin' && (
                               <Chip
                                 size="small"
@@ -1791,31 +1805,46 @@ const Dashboard = () => {
                             )}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {user?.email}
+                            {user.email}
                           </Typography>
                         </Box>
                       </Box>
                     </TableCell>
                     <TableCell align="center">
-                      <Typography variant="body1">
-                        {typeof user?.projectCount === 'number' ? user.projectCount : 0}
-                      </Typography>
+                      <Chip
+                        label={user.projectCount}
+                        color={user.projectCount > 0 ? 'primary' : 'default'}
+                        size="small"
+                      />
                     </TableCell>
                     <TableCell align="center">
-                      <Typography variant="body1">
-                        {typeof user?.reportCount === 'number' ? user.reportCount : 0}
-                      </Typography>
+                      <Chip
+                        label={user.reportCount}
+                        color={user.reportCount > 0 ? 'success' : 'default'}
+                        size="small"
+                      />
                     </TableCell>
                     <TableCell align="center">
                       <Typography variant="body2" color="text.secondary">
-                        {formatLastActive(user?.last_login)}
+                        {formatLastActive(user.last_login)}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
                         <Tooltip title={t('Send Email')}>
-                          <IconButton size="small" onClick={() => window.location.href = `mailto:${user.email}`}>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => window.location.href = `mailto:${user.email}`}
+                          >
                             <EmailIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('View Details')}>
+                          <IconButton 
+                            size="small"
+                            onClick={() => navigate(`/users/${user.id}`)}
+                          >
+                            <MoreIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       </Box>

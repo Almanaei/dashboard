@@ -8,6 +8,8 @@ import {
   getUserStats
 } from '../controllers/StatisticsController.js';
 import { User } from '../models/index.js';
+import { sequelize } from '../config/database.js';
+import { Op } from 'sequelize';
 
 const router = express.Router();
 
@@ -18,7 +20,7 @@ router.use(verifyToken);
 router.get('/projects', getProjectStats);
 
 // Get project trends
-router.get('/trends', getProjectTrends);
+router.get('/projects/trends', getProjectTrends);
 
 // Get project performance
 router.get('/performance', getProjectPerformance);
