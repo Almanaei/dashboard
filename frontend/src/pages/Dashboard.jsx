@@ -156,7 +156,10 @@ const Dashboard = () => {
   const [statistics, setStatistics] = useState({
     projects: 0,
     reports: 0,
-    users: 0
+    users: 0,
+    summary: {},
+    recentUsers: [],
+    activeUsers: []
   });
   const [chartData, setChartData] = useState(null);
   const [userStats, setUserStats] = useState([]);
@@ -351,37 +354,62 @@ const Dashboard = () => {
           setStartDate(periodStartDate);
         }
 
-        // Fetch statistics using the service
-        const statsData = await getDashboardStats();
-        setStatistics(statsData);
+        // Fetch both dashboard and user statistics
+        const [dashboardData, userStatsData] = await Promise.all([
+          getDashboardStats(),
+          getUserStats()
+        ]);
 
-        // Fetch trends data with date range using the service
-        const trendsData = await getProjectTrends(
-          selectedPeriod,
-          format(periodStartDate, 'yyyy-MM-dd'),
-          format(endDate || new Date(), 'yyyy-MM-dd')
-        );
+        // Update statistics with both dashboard and user data
+        setStatistics(prev => ({
+          ...prev,
+          projects: dashboardData?.projectCount || 0,
+          reports: dashboardData?.reportCount || 0,
+          users: dashboardData?.userCount || 0,
+          summary: userStatsData?.summary || {},
+          recentUsers: userStatsData?.users || [],
+          activeUsers: userStatsData?.users?.filter(u => u.last_login) || []
+        }));
 
-        // Generate date labels based on period
-        const dateFormat = selectedPeriod === 'D' ? 'MMM dd' : selectedPeriod === 'M' ? 'MMM yyyy' : 'yyyy';
+        // Generate date range for trends
         const dates = generateDateRange(periodStartDate, endDate || new Date(), selectedPeriod);
+        const dateFormat = selectedPeriod === 'D' ? 'MMM dd' : selectedPeriod === 'M' ? 'MMM yyyy' : 'yyyy';
         const labels = dates.map(date => format(date, dateFormat));
 
         // Initialize data arrays with zeros
-        const projectData = new Array(labels.length).fill(0);
-        const reportData = new Array(labels.length).fill(0);
+        const projectData = new Array(dates.length).fill(0);
+        const reportData = new Array(dates.length).fill(0);
 
-        // Fill in the actual data
-        trendsData.forEach(trend => {
-          const date = new Date(trend.date);
-          const index = dates.findIndex(d => 
-            format(d, dateFormat) === format(date, dateFormat)
+        try {
+          // Fetch trends data with date range
+          const trendsData = await getProjectTrends(
+            format(periodStartDate, 'yyyy-MM-dd'),
+            format(endDate || new Date(), 'yyyy-MM-dd'),
+            selectedPeriod
           );
-          if (index !== -1) {
-            projectData[index] = trend.projectCount;
-            reportData[index] = trend.reportCount;
+
+          console.log('Trends data received:', trendsData); // Debug log
+
+          if (Array.isArray(trendsData)) {
+            trendsData.forEach(trend => {
+              if (!trend.date) return;
+              
+              const date = new Date(trend.date);
+              const formattedDate = format(date, dateFormat);
+              const index = labels.findIndex(label => label === formattedDate);
+              
+              if (index !== -1) {
+                projectData[index] = parseInt(trend.projectCount) || 0;
+                reportData[index] = parseInt(trend.reportCount) || 0;
+              }
+            });
           }
-        });
+        } catch (trendsError) {
+          console.error('Error fetching trends:', trendsError);
+          // Don't throw here, just log the error and continue with empty data
+        }
+
+        console.log('Chart data being set:', { labels, projectData, reportData }); // Debug log
 
         setChartData({
           labels,
@@ -391,14 +419,16 @@ const Dashboard = () => {
               data: projectData,
               borderColor: 'rgb(75, 192, 192)',
               backgroundColor: 'rgba(75, 192, 192, 0.5)',
-              tension: 0.4
+              tension: 0.4,
+              fill: true
             },
             {
               label: 'Reports',
               data: reportData,
               borderColor: 'rgb(255, 99, 132)',
               backgroundColor: 'rgba(255, 99, 132, 0.5)',
-              tension: 0.4
+              tension: 0.4,
+              fill: true
             }
           ]
         });
@@ -420,8 +450,25 @@ const Dashboard = () => {
     const fetchProjects = async () => {
       try {
         setLoading(true);
-        const projects = await getProjects(searchQuery);
-        setUserStats(projects);
+        const response = await getProjects(searchQuery);
+        
+        // Update user stats with project data
+        if (response && Array.isArray(response)) {
+          const projectsByUser = response.reduce((acc, project) => {
+            if (!acc[project.created_by]) {
+              acc[project.created_by] = {
+                projectCount: 0,
+                reportCount: 0,
+                ...project.creator
+              };
+            }
+            acc[project.created_by].projectCount++;
+            return acc;
+          }, {});
+          
+          setUserStats(Object.values(projectsByUser));
+        }
+        
         setLoading(false);
       } catch (error) {
         console.error('Error fetching projects:', error);
@@ -442,11 +489,22 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         
-        const data = await getUserStats(page + 1, rowsPerPage, searchQuery, sortField, sortOrder);
+        const data = await getUserStats();
         
-        if (data.users && Array.isArray(data.users)) {
-          setUserStats(data.users);
-          setTotalUsers(data.pagination.total);
+        if (data && data.summary) {
+          setStatistics(prev => ({
+            ...prev,
+            users: data.summary.total_users || 0,
+            activeUsers: data.summary.active_users || 0,
+            inactiveUsers: data.summary.inactive_users || 0,
+            adminCount: data.summary.admin_count || 0,
+            userCount: data.summary.user_count || 0,
+            activeLast24h: data.summary.active_last_24h || 0,
+            activeLast7d: data.summary.active_last_7d || 0,
+            activeLast30d: data.summary.active_last_30d || 0
+          }));
+          setUserStats(data.recentUsers || []);
+          setTotalUsers(data.summary.total_users || 0);
         } else {
           throw new Error('Invalid data format received');
         }
@@ -461,7 +519,7 @@ const Dashboard = () => {
     if (token) {
       fetchUserStatsData();
     }
-  }, [token, page, rowsPerPage, searchQuery, sortField, sortOrder]);
+  }, [token]);
 
   // Add pagination handlers
   const handleChangePage = (event, newPage) => {
@@ -477,8 +535,8 @@ const Dashboard = () => {
   const metrics = React.useMemo(() => [
     {
       label: t('projects'),
-      value: statistics.projects,
-      displayValue: statistics.projects.toLocaleString(),
+      value: statistics?.projects || 0,
+      displayValue: (statistics?.projects || 0).toLocaleString(),
       color: '#2196f3',
       dots: [
         { color: '#e0e0e0' },
@@ -488,8 +546,8 @@ const Dashboard = () => {
     },
     {
       label: t('reports'),
-      value: statistics.reports,
-      displayValue: statistics.reports.toLocaleString(),
+      value: statistics?.reports || 0,
+      displayValue: (statistics?.reports || 0).toLocaleString(),
       color: '#4CAF50',
       dots: [
         { color: '#e0e0e0' },
@@ -499,8 +557,8 @@ const Dashboard = () => {
     },
     {
       label: t('users'),
-      value: statistics.users,
-      displayValue: statistics.users.toLocaleString(),
+      value: statistics?.users || 0,
+      displayValue: (statistics?.users || 0).toLocaleString(),
       color: '#f44336',
       dots: [
         { color: '#e0e0e0' },
